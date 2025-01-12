@@ -61,7 +61,7 @@ class UserInterface:
                     if self.selected_square:
                         start_row, start_col = self.selected_square
                         print(f"Selected square: {self.selected_square}, attempting to move to: ({row}, {col})")
-                        if self.chessboard.move_pawn((start_row, start_col), (row, col)):
+                        if self.chessboard.move_pawn((start_row, start_col), (row, col), self.playerColor ):
                             move = (start_row, start_col, row, col)
                             waiting_for_move = False
                             print(f"Move successful: {move}")
