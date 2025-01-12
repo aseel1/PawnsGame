@@ -70,8 +70,8 @@ def start_server():
         surface = pygame.display.set_mode([600, 600])
         pygame.display.set_caption("Pawn Chess - Server")
         Board = ChessBoard()
-        UI = UserInterface(surface, Board)
-        
+        UI = UserInterface(surface, Board, player_color=server_color)
+
         
     #! Client vs Client
     elif mode == "2":    
@@ -131,26 +131,37 @@ def start_server():
                 print("Your turn (Server GUI):")
                 move, flag = UI.clientMove()  # Using the same method as the client for making a move
                 
-                if flag == -1 or move is None:
-                    clients[0].send("exit".encode())
-                    break
+
                 # Format move as e2e4
                 move_str = f"{chr(97 + move[1])}{8 - move[0]}{chr(97 + move[3])}{8 - move[2]}"
                 clients[0].send(move_str.encode())
                 
+                # 🔥 Check if the server wins
+                winner = Board.is_game_over(server_color)
+                if winner:
+                    print(f"{'Server' if winner == server_color else 'Client'} wins!")
+                    clients[0].send("exit".encode())
+                    break
+                        
             else:
                 # Client's turn
                 clients[0].send("Your turn".encode())
                 move = clients[0].recv(1024).decode()
-                if move == "exit":
-                    print("Client resigned. Game over.")
-                    break
+                
+
                 print(f"Client's move: {move}")
                 
                 # Apply the client's move on the server's GUI
                 start_col, start_row = ord(move[0]) - 97, 8 - int(move[1])
                 end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
                 Board.move_pawn((start_row, start_col), (end_row, end_col), client_color)
+                
+                # 🔥 Check if the client wins
+                winner = Board.is_game_over(client_color)
+                if winner:
+                    print(f"{'Client' if winner == client_color else 'Server'} wins!")
+                    clients[0].send("exit".encode())
+                    break
 
 
 

@@ -3,17 +3,17 @@
 import pygame
 
 # Define colors
-WHITE = (238, 238, 210)
+WHITE = (238, 238, 200)
 BLACK = (118, 150, 86)
 HIGHLIGHT_COLOR = (0, 255, 0)
 SQUARE_SIZE = 75
 
 class UserInterface:
-    def __init__(self, surface, chessboard):
+    def __init__(self, surface, chessboard , player_color):
         self.surface = surface
         self.chessboard = chessboard
         self.selected_square = None
-        self.playerColor = "W"
+        self.playerColor = player_color  # Dynamically assigned
         self.firstgame = True
         self.time = 0
 

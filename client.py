@@ -137,7 +137,12 @@ def main():
             # ✅ Apply the move to the internal board
             board.move_pawn(move[0], move[1], player_color)
 
-        #? Step 7: Handle opponent's move
+        #? Step 7: Handle game termination
+        elif data == "exit":
+            print("Game over. Disconnecting.")
+            break
+
+        #? Step 8: Handle opponent's move
         elif len(data) == 4:  # e.g., "e2e4"
             print(f"Opponent moved: {data}")
 
@@ -149,10 +154,6 @@ def main():
             opponent_color = "B" if player_color == "W" else "W"
             board.move_pawn((start_row, start_col), (end_row, end_col), opponent_color)
             
-        #? Step 8: Handle game termination
-        elif data == "exit":
-            print("Game over. Disconnecting.")
-            break
 
 
 
