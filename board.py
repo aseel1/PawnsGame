@@ -17,54 +17,91 @@ class ChessBoard:
         self.enpassantCol = -1
         self.round = 0
 
-    def move_pawn(self, start_pos, end_pos, player_color):
-        """Move a pawn if the move is legal and belongs to the player."""
+    def move_pawn(self, start_pos, end_pos, player_color, simulate=False):
+        """Move a pawn if the move is legal, including diagonal captures and en passant."""
         start_row, start_col = start_pos
         end_row, end_col = end_pos
 
         piece = self.boardArray[start_row][start_col]
+        opponent_pawn = "bp" if player_color == "W" else "wp"
 
         # Check if the pawn belongs to the player
         if player_color == "W" and piece != "wp":
-            print("Invalid move: You can only move white pawns!")
             return False
         elif player_color == "B" and piece != "bp":
-            print("Invalid move: You can only move black pawns!")
             return False
+
+        # Flag to check if a capture occurred
+        captured = False
 
         # White pawn moves
         if piece == "wp":
+            # Move forward by 1
             if end_row == start_row - 1 and start_col == end_col and self.boardArray[end_row][end_col] == "--":
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
+                self.enpassant = False  # Reset en passant
                 return True
+
+            # Move forward by 2 from starting position
             if start_row == 6 and end_row == start_row - 2 and start_col == end_col and \
-               self.boardArray[start_row - 1][start_col] == "--" and self.boardArray[end_row][end_col] == "--":
+            self.boardArray[start_row - 1][start_col] == "--" and self.boardArray[end_row][end_col] == "--":
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
+                self.enpassant = True
+                self.enpassantCol = start_col  # Track the column for en passant
                 return True
-            if end_row == start_row - 1 and abs(start_col - end_col) == 1 and \
-               self.boardArray[end_row][end_col].startswith("b"):
+
+            # ✅ Regular Diagonal Capture
+            if end_row == start_row - 1 and abs(start_col - end_col) == 1 and self.boardArray[end_row][end_col].startswith("b"):
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
-                return True
+                captured = True
+
+            # ✅ En Passant Capture (Corrected)
+            if self.enpassant and start_row == 3 and end_row == 2 and abs(start_col - end_col) == 1 and end_col == self.enpassantCol:
+                self.boardArray[end_row][end_col] = piece
+                self.boardArray[start_row][start_col] = "--"
+                self.boardArray[start_row][end_col] = "--"  # Remove the captured pawn
+                captured = True
+                self.enpassant = False  # Reset en passant
 
         # Black pawn moves
         elif piece == "bp":
+            # Move forward by 1
             if end_row == start_row + 1 and start_col == end_col and self.boardArray[end_row][end_col] == "--":
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
+                self.enpassant = False  # Reset en passant
                 return True
+
+            # Move forward by 2 from starting position
             if start_row == 1 and end_row == start_row + 2 and start_col == end_col and \
-               self.boardArray[start_row + 1][start_col] == "--" and self.boardArray[end_row][end_col] == "--":
+            self.boardArray[start_row + 1][start_col] == "--" and self.boardArray[end_row][end_col] == "--":
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
+                self.enpassant = True
+                self.enpassantCol = start_col
                 return True
-            if end_row == start_row + 1 and abs(start_col - end_col) == 1 and \
-               self.boardArray[end_row][end_col].startswith("w"):
+
+            # ✅ Regular Diagonal Capture
+            if end_row == start_row + 1 and abs(start_col - end_col) == 1 and self.boardArray[end_row][end_col].startswith("w"):
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
-                return True
+                captured = True
+
+            # ✅ En Passant Capture (Corrected)
+            if self.enpassant and start_row == 4 and end_row == 5 and abs(start_col - end_col) == 1 and end_col == self.enpassantCol:
+                self.boardArray[end_row][end_col] = piece
+                self.boardArray[start_row][start_col] = "--"
+                self.boardArray[start_row][end_col] = "--"  # Remove the captured pawn
+                captured = True
+                self.enpassant = False  # Reset en passant
+
+        # 🔔 Print capture only once
+        if captured and not simulate:
+            print(f"{'White' if player_color == 'W' else 'Black'} pawn captured a piece!")
+            return True
 
         return False
 
@@ -113,4 +150,4 @@ class ChessBoard:
                                 return True
         return False  # No valid moves
     
-    
+

@@ -47,8 +47,11 @@ def start_server():
         else:
             server_color = "B"
             client_color = "W"
+        
+        
             
-            
+    print("Waiting for a client to connect...")
+          
     
     # Accept client(s)
     

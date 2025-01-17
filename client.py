@@ -3,13 +3,58 @@ import socket
 import pygame
 from board import ChessBoard
 
+CHECKMATE = 10000
+LOSE = -10000
 
 # Minimax Evaluation Function
 def evaluate_board(board, player_color):
-    """Simple evaluation based on pawn count."""
-    white_pawns = sum(row.count("wp") for row in board.boardArray)
-    black_pawns = sum(row.count("bp") for row in board.boardArray)
-    return white_pawns - black_pawns if player_color == "W" else black_pawns - white_pawns
+    """
+    Enhanced evaluation:
+    - Rewards capturing pawns.
+    - Rewards advancing pawns.
+    - Maximizes reward for pawns one step from promotion.
+    """
+    score = 0
+
+    # Constants for scoring
+    PAWN_VALUE = 100           # Base reward for each pawn
+    CAPTURE_REWARD = 300       # Extra reward for capturing pawns
+    ADVANCE_REWARD = 10        # Reward for moving forward
+    PROMOTION_REWARD = 100000     # Max reward when close to promotion
+
+    # Set color-specific parameters
+    opponent_color = "B" if player_color == "W" else "W"
+    player_pawn = "wp" if player_color == "W" else "bp"
+    opponent_pawn = "bp" if player_color == "W" else "wp"
+    direction = -1 if player_color == "W" else 1
+    promotion_row = 0 if player_color == "W" else 7
+    almost_promotion_row = 1 if player_color == "W" else 6
+
+    for row in range(8):
+        for col in range(8):
+            piece = board.boardArray[row][col]
+
+            # Reward player pawns
+            if piece == player_pawn:
+                score += PAWN_VALUE  # Base reward for having pawns
+                advancement = (6 - row) if player_color == "W" else (row - 1)
+                score += advancement * ADVANCE_REWARD  # Reward advancing forward
+
+                # Extra reward if pawn is one move from promotion
+                if row == almost_promotion_row:
+                    score += PROMOTION_REWARD
+
+            # Penalize opponent pawns
+            elif piece == opponent_pawn:
+                score -= PAWN_VALUE  # Penalize for opponent's pawns
+                advancement = (row - 1) if player_color == "W" else (6 - row)
+                score -= advancement * ADVANCE_REWARD  # Penalize for opponent's advancement
+
+                # Extra penalty if opponent is one move from promotion
+                if row == almost_promotion_row:
+                    score -= PROMOTION_REWARD
+
+    return score
 
 # Generate All Valid Moves for a Given Color
 def get_all_moves(board, player_color):
@@ -27,15 +72,18 @@ def get_all_moves(board, player_color):
 
                 # Move forward by 2 from starting position
                 if (player_color == "W" and row == 6) or (player_color == "B" and row == 1):
-                    if board.boardArray[row + direction][col] == "--" and board.boardArray[row + 2 * direction][col] == "--":
+                    if (0 <= row + 2 * direction < 8 and
+                        board.boardArray[row + direction][col] == "--" and
+                        board.boardArray[row + 2 * direction][col] == "--"):
                         moves.append(((row, col), (row + 2 * direction, col)))
 
-                # Capture diagonally
+                # Capture diagonally (with boundary checks)
                 for dc in [-1, 1]:
-                    if 0 <= col + dc < 8:
-                        target = board.boardArray[row + direction][col + dc]
+                    new_row, new_col = row + direction, col + dc
+                    if 0 <= new_row < 8 and 0 <= new_col < 8:
+                        target = board.boardArray[new_row][new_col]
                         if (player_color == "W" and target == "bp") or (player_color == "B" and target == "wp"):
-                            moves.append(((row, col), (row + direction, col + dc)))
+                            moves.append(((row, col), (new_row, new_col)))
     return moves
 
 # Apply a Move to the Board
@@ -45,7 +93,7 @@ def apply_move(board, move, player_color):
     new_board.boardArray = [row[:] for row in board.boardArray]  # Deep copy
 
     start, end = move
-    new_board.move_pawn(start, end, player_color)
+    new_board.move_pawn(start, end, player_color, simulate=True)  # 🔥 Disable printing during simulation
     return new_board
 
 # Convert a Move to Chess Notation (e.g., e2e4)
@@ -53,9 +101,12 @@ def move_to_notation(move):
     start, end = move
     return f"{chr(97 + start[1])}{8 - start[0]}{chr(97 + end[1])}{8 - end[0]}"
 
-# Minimax Algorithm
-def minimax(board, depth, maximizing_player, player_color):
-    """Minimax algorithm for decision making."""
+def minimax(board, depth, alpha, beta, maximizing_player, player_color):
+    """
+    Optimized Minimax algorithm with Alpha-Beta Pruning.
+    - Alpha: Best value the maximizer can guarantee.
+    - Beta: Best value the minimizer can guarantee.
+    """
     if depth == 0:
         return evaluate_board(board, player_color), None
 
@@ -66,21 +117,36 @@ def minimax(board, depth, maximizing_player, player_color):
         max_eval = float('-inf')
         for move in get_all_moves(board, player_color):
             new_board = apply_move(board, move, player_color)
-            eval_score, _ = minimax(new_board, depth - 1, False, player_color)
+            eval_score, _ = minimax(new_board, depth - 1, alpha, beta, False, player_color)
+            
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
+
+            # Alpha-Beta Pruning
+            alpha = max(alpha, eval_score)
+            if beta <= alpha:
+                break  # Cut off remaining branches
+
         return max_eval, best_move
+
     else:
         min_eval = float('inf')
         for move in get_all_moves(board, opponent_color):
             new_board = apply_move(board, move, opponent_color)
-            eval_score, _ = minimax(new_board, depth - 1, True, player_color)
+            eval_score, _ = minimax(new_board, depth - 1, alpha, beta, True, player_color)
+            
             if eval_score < min_eval:
                 min_eval = eval_score
                 best_move = move
+
+            # Alpha-Beta Pruning
+            beta = min(beta, eval_score)
+            if beta <= alpha:
+                break  # Cut off remaining branches
+
         return min_eval, best_move
-    
+
     
 def main():
 
@@ -126,8 +192,7 @@ def main():
         #? Step 6: Handle turn
         elif data == "Your turn" and game_active:
             print("Agent is thinking...")
-            _, move = minimax(board, depth=2, maximizing_player=True, player_color=player_color)  # Use Minimax to decide the move
-            
+            _, move =minimax(board, depth=6, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
             # ✅ Convert the move to chess notation
             move_notation = move_to_notation(move)
             print(f"Agent move: {move_notation}")
