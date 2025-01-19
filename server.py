@@ -101,33 +101,49 @@ def start_server():
             surface = pygame.display.set_mode([600, 600])
             pygame.display.set_caption("Pawn Chess - Client vs Client")
             Board = ChessBoard()
-            UI = UserInterface(surface, Board)
+            UI = UserInterface(surface, Board , player_color=server_color)
     else:
         print("Invalid selection.")
         return
         
     
-    # Step 2: Send custom Setup command
+    #! Step 2: Send custom Setup command
     setup_message = input("Enter setup command (e.g., 'Setup Wb4 Wa3 Wc2 Bg7 Wd4 Bg6 Be7'): ")
     send_to_all_clients(setup_message)
     for client in clients:
         wait_for_ok(client, "setup confirmation")
 
-    # Step 3: Send game time
+    #! Step 3: Send game time
     game_time = input("Enter game time in minutes (e.g., 'Time 10'): ")
     send_to_all_clients(game_time)
+    game_time = float(game_time) # Convert to seconds
+    
+    server_time_remaining = game_time
+    client_time_remaining = game_time
+    start_time = pygame.time.get_ticks()
+
+    UI.server_time = server_time_remaining   # Convert to minutes
+    UI.client_time = client_time_remaining   # Convert to minutes
+        
+    
     for client in clients:
         wait_for_ok(client, "time confirmation")
 
-    # Step 4: Begin the game
+    #! Step 4: Begin the game
     begin_message = input(" Enter begin to the game...")
     send_to_all_clients(begin_message)
-
-    # Step 5: Game loop
+ 
+    #! Step 5: Game loop
     player_index = 0 if server_color == "W" else 1
     running = True
+    clock = pygame.time.Clock()  # Pygame clock to manage the frame rate
 
     while running:
+        
+        current_time = pygame.time.get_ticks()
+        elapsed_time = (current_time - start_time) / 1000  # Convert to seconds
+        start_time = current_time  # Reset start time for the next loop
+
         if mode == "1":
             if player_index == 0:
                 # Server's turn (User input)
@@ -135,10 +151,19 @@ def start_server():
                 move, flag = UI.clientMove()  # Using the same method as the client for making a move
                 
 
+                # Calculate time taken
+                server_time_remaining -= elapsed_time
+
+                if server_time_remaining <= 0:
+                    print("Server ran out of time. Client wins!")
+                    clients[0].send("exit".encode())
+                    break
+
                 # Format move as e2e4
                 move_str = f"{chr(97 + move[1])}{8 - move[0]}{chr(97 + move[3])}{8 - move[2]}"
                 clients[0].send(move_str.encode())
-                
+                print(f"Time remaining for server: {server_time_remaining:.2f} seconds")
+
                 # 🔥 Check if the server wins
                 winner = Board.is_game_over(server_color)
                 if winner:
@@ -151,9 +176,19 @@ def start_server():
                 clients[0].send("Your turn".encode())
                 move = clients[0].recv(1024).decode()
                 
+                # Calculate time taken
+                client_time_remaining -= elapsed_time
+
+                if client_time_remaining <= 0:
+                    print("Client ran out of time. Server wins!")
+                    clients[0].send("exit".encode())
+                    break
+
+
 
                 print(f"Client's move: {move}")
-                
+                print(f"Time remaining for client: {client_time_remaining:.2f} seconds")
+
                 # Apply the client's move on the server's GUI
                 start_col, start_row = ord(move[0]) - 97, 8 - int(move[1])
                 end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
@@ -169,10 +204,14 @@ def start_server():
 
 
         elif mode == "2":
+            current_player_color=  "W" if player_index == 0 else "B"
+            opponent_color = "B" if current_player_color == "W" else "W"
+            
             # Client vs Client
             clients[player_index].send("Your turn".encode())
             move = clients[player_index].recv(1024).decode()
-
+            print(f"Player {current_player_color} move: {move}")
+            
             if move == "exit":
                 send_to_all_clients("exit")
                 print("A client resigned. Ending game.")
@@ -187,10 +226,19 @@ def start_server():
             end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
             Board.move_pawn((start_row, start_col), (end_row, end_col), "W" if player_index == 0 else "B")
 
+            # 🔥 Check if the client wins
+            winner = Board.is_game_over( "W" if player_index == 0 else "B")
+            if winner:
+                print(f"{'Client' if winner == client_color else 'Server'} wins!")
+                clients[0].send("exit".encode())
+                break
 
         # Switch turns
         player_index = 1 - player_index
-        
+        UI.server_time = server_time_remaining
+        UI.client_time = client_time_remaining
+        UI.draw_timer()
+
         UI.drawComponent()  # Always update the GUI
         pygame.display.flip()
         

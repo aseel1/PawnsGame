@@ -15,14 +15,25 @@ class UserInterface:
         self.selected_square = None
         self.playerColor = player_color  # Dynamically assigned
         self.firstgame = True
-        self.time = 0
+        self.server_time = 0
+        self.client_time = 0
+
+    def draw_timer(self):
+        """Display the remaining time for both server and client."""
+        font = pygame.font.Font(None, 36)
+        server_timer_text = font.render(f"Server Time: {self.server_time:.2f} min", True, (0, 0, 0))
+        client_timer_text = font.render(f"Client Time: {self.client_time:.2f} min", True, (0, 0, 0))
+        self.surface.blit(server_timer_text, (10, 10))  # Top-left corner
+        self.surface.blit(client_timer_text, (10, 50))  # Below server time
 
     def drawComponent(self):
         """Draw the board and pieces."""
         self.draw_board()
         self.draw_pieces()
+        self.draw_timer()
         pygame.display.update()
-
+        
+        
     def draw_board(self):
         """Draw the chessboard grid."""
         for row in range(8):
@@ -56,22 +67,34 @@ class UserInterface:
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     col, row = pos[0] // SQUARE_SIZE, pos[1] // SQUARE_SIZE
-                    print(f"Mouse clicked at: {pos}, translated to board position: ({row}, {col})")
+                    #! print(f"Mouse clicked at: {pos}, translated to board position: ({row}, {col})")
 
                     if self.selected_square:
                         start_row, start_col = self.selected_square
-                        print(f"Selected square: {self.selected_square}, attempting to move to: ({row}, {col})")
+                       #! print(f"Selected square: {self.selected_square}, attempting to move to: ({row}, {col})")
                         if self.chessboard.move_pawn((start_row, start_col), (row, col), self.playerColor ):
                             move = (start_row, start_col, row, col)
                             waiting_for_move = False
-                            print(f"Move successful: {move}")
+                          #!  print(f"Move successful: {move}")
                         else:
                             print("Invalid move")
                         self.selected_square = None
                     elif self.chessboard.boardArray[row][col] in ["wp", "bp"]:
                         self.selected_square = (row, col)
-                        print(f"Piece selected at: {self.selected_square}")
+                     #!   print(f"Piece selected at: {self.selected_square}")
             
             self.drawComponent()
 
         return move, flag
+
+
+
+
+
+
+
+
+
+
+
+
