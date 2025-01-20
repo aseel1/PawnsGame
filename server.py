@@ -136,13 +136,10 @@ def start_server():
     #! Step 5: Game loop
     player_index = 0 if server_color == "W" else 1
     running = True
-    clock = pygame.time.Clock()  # Pygame clock to manage the frame rate
+    last_turn_start_time = pygame.time.get_ticks() / 1000  # Start time in seconds
 
     while running:
-        
-        current_time = pygame.time.get_ticks()
-        elapsed_time = (current_time - start_time) / 1000  # Convert to seconds
-        start_time = current_time  # Reset start time for the next loop
+        current_time = pygame.time.get_ticks() / 1000  # Current time in seconds
 
         if mode == "1":
             if player_index == 0:
@@ -150,9 +147,13 @@ def start_server():
                 print("Your turn (Server GUI):")
                 move, flag = UI.clientMove()  # Using the same method as the client for making a move
                 
-
+                
+                current_time2 = pygame.time.get_ticks() / 1000
                 # Calculate time taken
+                elapsed_time = current_time2 - current_time
                 server_time_remaining -= elapsed_time
+
+                print(server_time_remaining)
 
                 if server_time_remaining <= 0:
                     print("Server ran out of time. Client wins!")
@@ -177,6 +178,8 @@ def start_server():
                 move = clients[0].recv(1024).decode()
                 
                 # Calculate time taken
+                current_time2 = pygame.time.get_ticks() / 1000
+                elapsed_time = current_time2 - current_time
                 client_time_remaining -= elapsed_time
 
                 if client_time_remaining <= 0:
@@ -234,14 +237,12 @@ def start_server():
                 break
 
         # Switch turns
-        player_index = 1 - player_index
         UI.server_time = server_time_remaining
         UI.client_time = client_time_remaining
-        UI.draw_timer()
-
         UI.drawComponent()  # Always update the GUI
         pygame.display.flip()
-        
+        player_index = 1 - player_index
+
     # Close connections
     for client in clients:
         client.close()

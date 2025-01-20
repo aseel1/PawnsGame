@@ -18,11 +18,14 @@ class UserInterface:
         self.server_time = 0
         self.client_time = 0
 
+# UserInterface.py Updates
+
     def draw_timer(self):
-        """Display the remaining time for both server and client."""
+        """Display the remaining time for both server and client dynamically in seconds."""
         font = pygame.font.Font(None, 36)
-        server_timer_text = font.render(f"Server Time: {self.server_time:.2f} min", True, (0, 0, 0))
-        client_timer_text = font.render(f"Client Time: {self.client_time:.2f} min", True, (0, 0, 0))
+        server_timer_text = font.render(f"Server Time: {int(self.server_time)} sec", True, (0, 0, 0))
+        client_timer_text = font.render(f"Client Time: {int(self.client_time)} sec", True, (0, 0, 0))
+        pygame.draw.rect(self.surface, (255, 255, 255), (0, 0, 600, 80))  # Clear timer area
         self.surface.blit(server_timer_text, (10, 10))  # Top-left corner
         self.surface.blit(client_timer_text, (10, 50))  # Below server time
 
