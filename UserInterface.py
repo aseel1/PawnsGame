@@ -25,10 +25,15 @@ class UserInterface:
         font = pygame.font.Font(None, 36)
         server_timer_text = font.render(f"Server Time: {int(self.server_time)} sec", True, (0, 0, 0))
         client_timer_text = font.render(f"Client Time: {int(self.client_time)} sec", True, (0, 0, 0))
-        pygame.draw.rect(self.surface, (255, 255, 255), (0, 0, 600, 80))  # Clear timer area
+        
+        # Clear timer area
+        pygame.draw.rect(self.surface, (255, 255, 255), (0, 0, 600, 40))
+        
+        # Display timers side by side
         self.surface.blit(server_timer_text, (10, 10))  # Top-left corner
-        self.surface.blit(client_timer_text, (10, 50))  # Below server time
-
+        self.surface.blit(client_timer_text, (300, 10))  # Right of the server time
+        
+    
     def drawComponent(self):
         """Draw the board and pieces."""
         self.draw_board()

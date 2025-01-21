@@ -182,12 +182,15 @@ def start_server():
                 elapsed_time = current_time2 - current_time
                 client_time_remaining -= elapsed_time
 
+
                 if client_time_remaining <= 0:
                     print("Client ran out of time. Server wins!")
                     clients[0].send("exit".encode())
                     break
 
 
+                # Send remaining time to the client
+                clients[0].send(f"TimeRemaining {client_time_remaining:.2f}".encode())
 
                 print(f"Client's move: {move}")
                 print(f"Time remaining for client: {client_time_remaining:.2f} seconds")
@@ -207,35 +210,57 @@ def start_server():
 
 
         elif mode == "2":
+            
             current_player_color=  "W" if player_index == 0 else "B"
             opponent_color = "B" if current_player_color == "W" else "W"
             
+            #this is the remaining time for the current client  ServerTime for client0 and ClientTime for client1
+            player_time_remaining = (
+            server_time_remaining if player_index == 0 else client_time_remaining
+            )
+                    
             # Client vs Client
             clients[player_index].send("Your turn".encode())
             move = clients[player_index].recv(1024).decode()
             print(f"Player {current_player_color} move: {move}")
             
-            if move == "exit":
-                send_to_all_clients("exit")
-                print("A client resigned. Ending game.")
-                break
 
-            print(f"Player {player_index + 1} move: {move}")
+
             clients[1 - player_index].send(move.encode()) # Send move to client
+            
 
 
             # Apply the move to the GUI
             start_col, start_row = ord(move[0]) - 97, 8 - int(move[1])
             end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
-            Board.move_pawn((start_row, start_col), (end_row, end_col), "W" if player_index == 0 else "B")
+            Board.move_pawn((start_row, start_col), (end_row, end_col), current_player_color)
 
+
+            current_time2 = pygame.time.get_ticks() / 1000
+            # Calculate time taken
+            elapsed_time = current_time2 - current_time
+            if player_index == 0:
+                server_time_remaining -= elapsed_time
+            else:
+                client_time_remaining -= elapsed_time
+            
+            # Check if the current player's time expired
+            if player_time_remaining <= 0:
+                send_to_all_clients("exit")
+                print(f"Player {player_index } ran out of time. Player {1 - player_index} wins!")
+                break
+            
             # 🔥 Check if the client wins
-            winner = Board.is_game_over( "W" if player_index == 0 else "B")
+            winner = Board.is_game_over(current_player_color)
             if winner:
                 print(f"{'Client' if winner == client_color else 'Server'} wins!")
                 clients[0].send("exit".encode())
-                break
+                clients[1].send("exit".encode())
 
+                break
+            
+            Board.print_board()
+            
         # Switch turns
         UI.server_time = server_time_remaining
         UI.client_time = client_time_remaining

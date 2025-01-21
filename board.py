@@ -4,17 +4,29 @@ class ChessBoard:
     def __init__(self):
         # Initialize the 8x8 board with white and black pawns
         self.boardArray = [
-            ["--"] * 8,      # Row 0: Empty
-            ["bp"] * 8,      # Row 1: Black pawns
-            ["--"] * 8,      # Row 2: Empty
-            ["--"] * 8,      # Row 3: Empty
-            ["--"] * 8,      # Row 4: Empty
-            ["--"] * 8,      # Row 5: Empty
-            ["wp"] * 8,      # Row 6: White pawns
-            ["--"] * 8       # Row 7: Empty
+            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 0: Empty
+            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 1: Empty
+            ["--", "wp", "--", "--", "--", "--", "bp", "--"],  # Row 2: Custom setup
+            ["bp", "--", "bp", "--", "wp", "--", "--", "bp"],  # Row 3: Custom setup
+            ["wp", "--", "wp", "bp", "--", "bp", "--", "wp"],  # Row 4: Custom setup
+            ["--", "--", "--", "--", "--", "--", "wp", "--"],  # Row 5: Custom setup
+            ["--", "--", "--", "--", "wp", "--", "--", "--"],  # Row 6: Custom setup
+            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 7: Empty
         ]
+ 
+        # self.boardArray = [
+        #     ["--"] * 8,      # Row 0: Empty
+        #     ["bp"] * 8,      # Row 1: Black pawns
+        #     ["--"] * 8,      # Row 2: Empty
+        #     ["--"] * 8,      # Row 3: Empty
+        #     ["--"] * 8,      # Row 4: Empty
+        #     ["--"] * 8,      # Row 5: Empty
+        #     ["wp"] * 8,      # Row 6: White pawns
+        #     ["--"] * 8       # Row 7: Empty
+        # ]
         self.enpassant = False
         self.enpassantCol = -1
+        self.en_passant_target = None  # Add this attribute
         self.round = 0
 
     def move_pawn(self, start_pos, end_pos, player_color, simulate=False):
@@ -41,6 +53,7 @@ class ChessBoard:
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
                 self.enpassant = False  # Reset en passant
+                self.en_passant_target = None  # Reset en passant target
                 return True
 
             # Move forward by 2 from starting position
@@ -50,6 +63,7 @@ class ChessBoard:
                 self.boardArray[start_row][start_col] = "--"
                 self.enpassant = True
                 self.enpassantCol = start_col  # Track the column for en passant
+                self.en_passant_target = (end_row, end_col)  # Set en passant target
                 return True
 
             # ✅ Regular Diagonal Capture
@@ -65,6 +79,7 @@ class ChessBoard:
                 self.boardArray[start_row][end_col] = "--"  # Remove the captured pawn
                 captured = True
                 self.enpassant = False  # Reset en passant
+                self.en_passant_target = None  # Reset en passant target
 
         # Black pawn moves
         elif piece == "bp":
@@ -73,6 +88,7 @@ class ChessBoard:
                 self.boardArray[end_row][end_col] = piece
                 self.boardArray[start_row][start_col] = "--"
                 self.enpassant = False  # Reset en passant
+                self.en_passant_target = None  # Reset en passant target
                 return True
 
             # Move forward by 2 from starting position
@@ -82,6 +98,7 @@ class ChessBoard:
                 self.boardArray[start_row][start_col] = "--"
                 self.enpassant = True
                 self.enpassantCol = start_col
+                self.en_passant_target = (end_row, end_col)  # Set en passant target
                 return True
 
             # ✅ Regular Diagonal Capture
@@ -97,6 +114,7 @@ class ChessBoard:
                 self.boardArray[start_row][end_col] = "--"  # Remove the captured pawn
                 captured = True
                 self.enpassant = False  # Reset en passant
+                self.en_passant_target = None  # Reset en passant target
 
         # 🔔 Print capture only once
         if captured and not simulate:
@@ -105,9 +123,8 @@ class ChessBoard:
 
         return False
 
-
     def is_game_over(self, player_color):
-        """Check if the game should end."""
+        """Check if the game should end from opponent side . this is made for easier interaction and printing ."""
         opponent_color = "B" if player_color == "W" else "W"
 
         # 1. Check if any pawn reached the opponent's back rank
@@ -135,6 +152,7 @@ class ChessBoard:
         """Check if the player has any valid moves."""
         direction = -1 if player_color == "W" else 1
         pawn = "wp" if player_color == "W" else "bp"
+        opponent_pawn = "bp" if player_color == "W" else "wp"
 
         for row in range(8):
             for col in range(8):
@@ -148,6 +166,44 @@ class ChessBoard:
                             target = self.boardArray[row + direction][col + dc]
                             if (player_color == "W" and target == "bp") or (player_color == "B" and target == "wp"):
                                 return True
+                            # En Passant capture
+                            if (player_color == "W" and row == 3 and self.boardArray[row][col + dc] == opponent_pawn and self.en_passant_target == (row, col + dc)) or \
+                               (player_color == "B" and row == 4 and self.boardArray[row][col + dc] == opponent_pawn and self.en_passant_target == (row, col + dc)):
+                                return True
         return False  # No valid moves
     
+    def is_game_over_2(self, player_color):
+        """Check if the game is over for the current player's turn."""
+        # 1. Check if the current player's pawns reached the back rank
+        if player_color == "W" and "wp" in self.boardArray[0]:
+            # White wins by reaching the opponent's end
+            return "W"
+        if player_color == "B" and "bp" in self.boardArray[7]:
+            # Black wins by reaching the opponent's end
+            return "B"
 
+        # 2. Check if the current player has no pawns left
+        player_pawn = "wp" if player_color == "W" else "bp"
+        if not any(player_pawn in row for row in self.boardArray):
+            opponent_color = "B" if player_color == "W" else "W"
+            return opponent_color
+
+        # 3. Check if the current player has any legal moves
+        if not self.has_moves(player_color):
+            opponent_color = "B" if player_color == "W" else "W"
+            return opponent_color
+
+        return None  # Game continues
+
+            
+    def print_board(self):
+        """Print the current state of the board."""
+        print("   a  b  c  d  e  f  g  h")
+        print(" +------------------------")
+        for row in range(8):
+            print(f"{8 - row}|", end=" ")
+            for col in range(8):
+                print(self.boardArray[row][col], end=" ")
+            print(f"|{8 - row}")
+        print(" +------------------------")
+        print("   a  b  c  d  e  f  g  h")

@@ -209,6 +209,8 @@ def get_all_moves(board, player_color):
     moves = []
     direction = -1 if player_color == "W" else 1
     pawn = "wp" if player_color == "W" else "bp"
+    en_passant_row = 3 if player_color == "W" else 4  # Row where en passant is possible
+    opponent_pawn = "bp" if player_color == "W" else "wp"
 
     for row in range(8):
         for col in range(8):
@@ -232,6 +234,17 @@ def get_all_moves(board, player_color):
                         if (player_color == "W" and target == "bp") or (player_color == "B" and target == "wp"):
                             moves.append(((row, col), (new_row, new_col)))
                         
+                                        # En Passant capture
+                if row == en_passant_row:
+                    for dc in [-1, 1]:
+                        new_col = col + dc
+                        if 0 <= new_col < 8:
+                            if board.boardArray[row][new_col] == opponent_pawn:
+                                # Check if the opponent's pawn just moved two squares forward
+                                if (player_color == "W" and row == 3 and board.boardArray[row + 1][new_col] == opponent_pawn) or \
+                                   (player_color == "B" and row == 4 and board.boardArray[row - 1][new_col] == opponent_pawn):
+                                    moves.append(((row, col), (row + direction, new_col)))
+
     return moves
 
 # Apply a Move to the Board
@@ -249,34 +262,23 @@ def move_to_notation(move):
     start, end = move
     return f"{chr(97 + start[1])}{8 - start[0]}{chr(97 + end[1])}{8 - end[0]}"
 
-def order_moves(board, moves, player_color):
-    """Prioritize captures and advancing moves."""
-    def move_score(move):
-        start, end = move
-        end_row, end_col = end
-        # Prioritize captures
-        target = board.boardArray[end_row][end_col]
-        if (player_color == "W" and target == "bp") or (player_color == "B" and target == "wp"):
-            return 1000
-        # Prioritize advancing moves
-        return -end_row if player_color == "B" else end_row
-
-    return sorted(moves, key=move_score, reverse=True)
 
 
 def minimax(board, depth, alpha, beta, maximizing_player, player_color):
-    if depth == 0 or board.is_game_over(player_color):
+    opponent_color = "B" if player_color == "W" else "W"
+    current_color = player_color if maximizing_player else opponent_color
+
+
+    if depth == 0 or board.is_game_over_2(current_color):
         return evaluate_board(board, player_color), None
 
+
     best_move = None
-    opponent_color = "B" if player_color == "W" else "W"
-
-    moves = get_all_moves(board, player_color if maximizing_player else opponent_color)
-    ordered_moves = order_moves(board, moves, player_color if maximizing_player else opponent_color)
-
+    moves = get_all_moves(board,current_color)
+    
     if maximizing_player:
         max_eval = float('-inf')
-        for move in ordered_moves:
+        for move in moves:
             new_board = apply_move(board, move, player_color)
             eval_score, _ = minimax(new_board, depth - 1, alpha, beta, False, player_color)
 
@@ -287,10 +289,11 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
             alpha = max(alpha, eval_score)
             if beta <= alpha:
                 break  # Alpha-Beta Pruning
+            
         return max_eval, best_move
     else:
         min_eval = float('inf')
-        for move in ordered_moves:
+        for move in moves:
             new_board = apply_move(board, move, opponent_color)
             eval_score, _ = minimax(new_board, depth - 1, alpha, beta, True, player_color)
 
@@ -301,6 +304,7 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
             beta = min(beta, eval_score)
             if beta <= alpha:
                 break  # Alpha-Beta Pruning
+
         return min_eval, best_move
 
     
@@ -349,8 +353,15 @@ def main():
         #? Step 6: Handle turn
         elif data == "Your turn" and game_active:
             print("Agent is thinking...")
-            _, move =minimax(board, depth=6, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
+            
+
+
+                
+            _, move =minimax(board, depth=5, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
             # ✅ Convert the move to chess notation
+   
+                
+                
             move_notation = move_to_notation(move)
             print(f"Agent move: {move_notation}")
             
@@ -358,7 +369,14 @@ def main():
             
             # ✅ Apply the move to the internal board
             board.move_pawn(move[0], move[1], player_color)
-
+        
+        
+        elif data.startswith("TimeRemaining"):
+            # Extract remaining time from the server
+            client_time_remaining = float(data.split()[1])
+            print(f"Updated time from server: {client_time_remaining:.2f} seconds")
+            
+    
         #? Step 7: Handle game termination
         elif data == "exit":
             print("Game over. Disconnecting.")
@@ -374,6 +392,7 @@ def main():
             
             # Apply the opponent's move to the client's board
             opponent_color = "B" if player_color == "W" else "W"
+            
             board.move_pawn((start_row, start_col), (end_row, end_col), opponent_color)
             
 
