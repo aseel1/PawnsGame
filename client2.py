@@ -337,7 +337,6 @@ def main():
         #? Step 3: Handle Setup command
         elif data.startswith("Setup"):
             print(f"Setting up the board: {data}")
-            board.initialize_custom_board(data)  # Initialize the board locally
             client_socket.send("OK".encode())
 
         #? Step 4: Handle game time
@@ -353,14 +352,18 @@ def main():
 
         #? Step 6: Handle turn
         elif data == "Your turn" and game_active:
-            
-            print("--------------------------------")
             print("Agent is thinking...")
-            _, move =minimax(board, depth=7, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
+            
+
+
+                
+            _, move =minimax(board, depth=5, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
             # ✅ Convert the move to chess notation
    
+                
+                
             move_notation = move_to_notation(move)
-            print(f"Agent move ({player_color}): {move_notation}")
+            print(f"Agent move: {move_notation}")
             
             client_socket.send(move_notation.encode())
             
@@ -371,7 +374,7 @@ def main():
         elif data.startswith("TimeRemaining"):
             # Extract remaining time from the server
             client_time_remaining = float(data.split()[1])
-            print(f"Client time remaining : {client_time_remaining:.2f} seconds")
+            print(f"Updated time from server: {client_time_remaining:.2f} seconds")
             
     
         #? Step 7: Handle game termination

@@ -2,32 +2,46 @@
 
 class ChessBoard:
     def __init__(self):
-        # Initialize the 8x8 board with white and black pawns
         self.boardArray = [
-            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 0: Empty
-            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 1: Empty
-            ["--", "wp", "--", "--", "--", "--", "bp", "--"],  # Row 2: Custom setup
-            ["bp", "--", "bp", "--", "wp", "--", "--", "bp"],  # Row 3: Custom setup
-            ["wp", "--", "wp", "bp", "--", "bp", "--", "wp"],  # Row 4: Custom setup
-            ["--", "--", "--", "--", "--", "--", "wp", "--"],  # Row 5: Custom setup
-            ["--", "--", "--", "--", "wp", "--", "--", "--"],  # Row 6: Custom setup
-            ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 7: Empty
+            ["--"] * 8,      # Row 0: Empty
+            ["bp"] * 8,      # Row 1: Black pawns
+            ["--"] * 8,      # Row 2: Empty
+            ["--"] * 8,      # Row 3: Empty
+            ["--"] * 8,      # Row 4: Empty
+            ["--"] * 8,      # Row 5: Empty
+            ["wp"] * 8,      # Row 6: White pawns
+            ["--"] * 8       # Row 7: Empty
         ]
- 
+        # Initialize the 8x8 board with white and black pawns
         # self.boardArray = [
-        #     ["--"] * 8,      # Row 0: Empty
-        #     ["bp"] * 8,      # Row 1: Black pawns
-        #     ["--"] * 8,      # Row 2: Empty
-        #     ["--"] * 8,      # Row 3: Empty
-        #     ["--"] * 8,      # Row 4: Empty
-        #     ["--"] * 8,      # Row 5: Empty
-        #     ["wp"] * 8,      # Row 6: White pawns
-        #     ["--"] * 8       # Row 7: Empty
+        #     ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 0: Empty
+        #     ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 1: Empty
+        #     ["--", "wp", "--", "--", "--", "--", "bp", "--"],  # Row 2: Custom setup
+        #     ["bp", "--", "bp", "--", "wp", "--", "--", "bp"],  # Row 3: Custom setup
+        #     ["wp", "--", "wp", "bp", "--", "bp", "--", "wp"],  # Row 4: Custom setup
+        #     ["--", "--", "--", "--", "--", "--", "wp", "--"],  # Row 5: Custom setup
+        #     ["--", "--", "--", "--", "wp", "--", "--", "--"],  # Row 6: Custom setup
+        #     ["--", "--", "--", "--", "--", "--", "--", "--"],  # Row 7: Empty
         # ]
+ 
         self.enpassant = False
         self.enpassantCol = -1
         self.en_passant_target = None  # Add this attribute
         self.round = 0
+
+
+
+    def initialize_custom_board(self, setup_message):
+        """Set up the board based on a custom setup message."""
+        self.boardArray = [["--"] * 8 for _ in range(8)]  # Reset the board
+        _, *positions = setup_message.split()
+
+        for position in positions:
+            piece = "wp" if position[0] == "W" else "bp"
+            col = ord(position[1]) - ord('a')  # Convert 'a'-'h' to 0-7
+            row = 8 - int(position[2])         # Convert '1'-'8' to 7-0
+            self.boardArray[row][col] = piece
+            
 
     def move_pawn(self, start_pos, end_pos, player_color, simulate=False):
         """Move a pawn if the move is legal, including diagonal captures and en passant."""

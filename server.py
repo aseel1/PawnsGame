@@ -108,7 +108,8 @@ def start_server():
         
     
     #! Step 2: Send custom Setup command
-    setup_message = input("Enter setup command (e.g., 'Setup Wb4 Wa3 Wc2 Bg7 Wd4 Bg6 Be7'): ")
+    setup_message = input("Enter setup command (e.g., 'Setup Wa2 Wb2 Wc2 Wd2 We2 Wf2 Wg2 Wh2 Ba7 Bb7 Bc7 Bd7 Be7 Bf7 Bg7 Bh7'): ")
+    Board.initialize_custom_board(setup_message)
     send_to_all_clients(setup_message)
     for client in clients:
         wait_for_ok(client, "setup confirmation")
@@ -144,16 +145,17 @@ def start_server():
         if mode == "1":
             if player_index == 0:
                 # Server's turn (User input)
-                print("Your turn (Server GUI):")
+                print("--------------------------------------------")
+                print(f"Your turn (Server {server_color}):")
                 move, flag = UI.clientMove()  # Using the same method as the client for making a move
                 
                 
-                current_time2 = pygame.time.get_ticks() / 1000
                 # Calculate time taken
+                current_time2 = pygame.time.get_ticks() / 1000
                 elapsed_time = current_time2 - current_time
                 server_time_remaining -= elapsed_time
 
-                print(server_time_remaining)
+                #?print(server_time_remaining)
 
                 if server_time_remaining <= 0:
                     print("Server ran out of time. Client wins!")
@@ -163,6 +165,8 @@ def start_server():
                 # Format move as e2e4
                 move_str = f"{chr(97 + move[1])}{8 - move[0]}{chr(97 + move[3])}{8 - move[2]}"
                 clients[0].send(move_str.encode())
+                
+                print(f"Server's move: {move_str}")
                 print(f"Time remaining for server: {server_time_remaining:.2f} seconds")
 
                 # 🔥 Check if the server wins
