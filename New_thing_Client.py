@@ -43,7 +43,7 @@ def evaluate_board(board, player_color):
 
             # Black pawns
             elif piece == "bp":
-                black_score += 10 + row * 2  # Base and advancement reward
+                black_score += 10 + (row-1)* 2  # Base and advancement reward
                 if is_passed_pawn((row, col), board, "B"):
                     black_score += 15
                 if is_pawn_blocked((row, col), board, "B"):
