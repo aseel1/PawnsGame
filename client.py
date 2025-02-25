@@ -1,139 +1,13 @@
 import random
 import socket
 import pygame
+import time
 from board import ChessBoard
 
 CHECKMATE = 100000000000
 LOSE =     -100000000000
 
-# Minimax Evaluation Function
-# def evaluate_board(board, player_color):
-#     """
-#     Advanced evaluation function for the pawn game.
-#     - Strongly rewards promotion and aggressive advancement.
-#     - Penalizes weak pawn structures (isolated, doubled, blocked pawns).
-#     - Encourages central control and blocking opponent pawns.
-#     - Recognizes passed pawns and threats.
-#     - Adds a heuristic for detecting a free road to victory.
-#     """
-#     score = 0
 
-#     # Constants for scoring
-#     PAWN_VALUE = 100              # Base reward for pawns
-#     ADVANCE_REWARD = 20           # Reward for advancing pawns
-#     CENTER_CONTROL_REWARD = 50    # Reward for controlling the center
-#     CAPTURE_THREAT_REWARD = 500   # Reward for threatening a capture
-#     CAPTURE_REWARD = 800          # Reward for actual captures
-#     PROMOTION_REWARD = 9000    # Max reward for promotion
-#     BLOCK_OPPONENT_REWARD = 200   # Reward for blocking opponent pawns
-#     PASSED_PAWN_REWARD = 300      # Reward for passed pawns
-#     FREE_PATH_REWARD = 9000       # Strong reward for a free path to promotion
-#     ISOLATED_PAWN_PENALTY = 75    # Penalty for isolated pawns
-#     DOUBLED_PAWN_PENALTY = 75     # Penalty for doubled pawns
-#     BLOCKED_PAWN_PENALTY = 100    # Penalty for blocked pawns
-#     OPPONENT_CAPTURE_PENALTY = 800  # Penalty if AI pawn is captured
-
-#     # Board-specific parameters
-#     player_pawn = "wp" if player_color == "W" else "bp"
-#     opponent_pawn = "bp" if player_color == "W" else "wp"
-#     direction = -1 if player_color == "W" else 1
-#     promotion_row = 0 if player_color == "W" else 7
-#     center_squares = [(3, 3), (3, 4), (4, 3), (4, 4)]  # Control of the center
-
-#     player_pawn_count = 0
-#     opponent_pawn_count = 0
-
-#     for row in range(8):
-#         for col in range(8):
-#             piece = board.boardArray[row][col]
-
-#             # ✅ Player's pawns
-#             if piece == player_pawn:
-#                 player_pawn_count += 1
-#                 score += PAWN_VALUE
-
-#                 # ✅ Advancement reward
-#                 advancement = (6 - row) if player_color == "W" else (row - 1)
-#                 score += advancement * ADVANCE_REWARD
-
-#                 # ✅ Promotion Reward
-#                 if row == promotion_row:
-#                     return PROMOTION_REWARD  # Instant win
-
-#                 # ✅ Passed pawn bonus (no opponent blocking it)
-#                 is_passed = True
-#                 check_row_range = range(row - 1, -1, -1) if player_color == "W" else range(row + 1, 8)
-#                 for r in check_row_range:
-#                     if board.boardArray[r][col] == opponent_pawn:
-#                         is_passed = False
-#                         break
-#                 if is_passed:
-#                     score += PASSED_PAWN_REWARD
-
-#                 # ✅ Free Path to Victory
-#                 is_free_path = True
-#                 for r in check_row_range:
-#                     if board.boardArray[r][col] != "--":
-#                         is_free_path = False
-#                         break
-#                 if is_free_path:
-#                     score += FREE_PATH_REWARD
-
-#                 # ✅ Control of the center
-#                 if (row, col) in center_squares:
-#                     score += CENTER_CONTROL_REWARD
-
-#                 # ✅ Threatening opponent pawns
-#                 for dc in [-1, 1]:
-#                     new_row, new_col = row + direction, col + dc
-#                     if 0 <= new_row < 8 and 0 <= new_col < 8:
-#                         target_piece = board.boardArray[new_row][new_col]
-#                         if target_piece == opponent_pawn:
-#                             score += CAPTURE_THREAT_REWARD
-
-#                 # ⚠️ Isolated pawn penalty
-#                 if not ((col > 0 and board.boardArray[row][col - 1] == player_pawn) or 
-#                         (col < 7 and board.boardArray[row][col + 1] == player_pawn)):
-#                     score -= ISOLATED_PAWN_PENALTY
-
-#                 # ⚠️ Doubled pawn penalty
-#                 for check_row in range(8):
-#                     if check_row != row and board.boardArray[check_row][col] == player_pawn:
-#                         score -= DOUBLED_PAWN_PENALTY
-#                         break
-
-#                 # ⚠️ Blocked pawn penalty
-#                 if 0 <= row + direction < 8 and board.boardArray[row + direction][col] != "--":
-#                     score -= BLOCKED_PAWN_PENALTY
-
-#             # 🚨 Opponent's pawns
-#             elif piece == opponent_pawn:
-#                 opponent_pawn_count += 1
-#                 score -= PAWN_VALUE
-
-#                 # Penalize if the opponent is close to promotion
-#                 if row == promotion_row:
-#                     return -PROMOTION_REWARD  # Instant loss
-
-#                 # Penalize if the opponent controls the center
-#                 if (row, col) in center_squares:
-#                     score -= CENTER_CONTROL_REWARD
-
-#                 # Reward blocking the opponent's pawns
-#                 if 0 <= row - direction < 8 and board.boardArray[row - direction][col] == player_pawn:
-#                     score += BLOCK_OPPONENT_REWARD
-
-#     # ✅ Reward for Actual Captures
-#     total_opponent_pawns = 8
-#     captured_opponent_pawns = total_opponent_pawns - opponent_pawn_count
-#     score += captured_opponent_pawns * CAPTURE_REWARD
-
-#     # 🚨 Penalty for Losing Pawns
-#     total_player_pawns = 8
-#     lost_player_pawns = total_player_pawns - player_pawn_count
-#     score -= lost_player_pawns * OPPONENT_CAPTURE_PENALTY
-    
-#     return score
 def evaluate_board(board, player_color):
     """
     Evaluate the board based on pawn game principles with integrated bitboard evaluation.
@@ -142,6 +16,7 @@ def evaluate_board(board, player_color):
     - Clear paths to promotion using bitboard are rewarded.
     - Score adjusts based on rank (advancement).
     """
+    print("Evaluating board...", player_color)
     white_score = 0
     black_score = 0
 
@@ -160,6 +35,8 @@ def evaluate_board(board, player_color):
                     white_score += 15
                 if is_pawn_blocked((row, col), board, "W"):
                     white_score -= 5
+                   
+                    
 
                 # Check for En Passant vulnerability
                 if is_en_passant_possible(board, (row, col), "W"):
@@ -167,7 +44,7 @@ def evaluate_board(board, player_color):
 
             # Black pawns
             elif piece == "bp":
-                black_score += 10 + row * 2  # Base and advancement reward
+                black_score += 10 + (row-1)* 2  # Base and advancement reward
                 if is_passed_pawn((row, col), board, "B"):
                     black_score += 15
                 if is_pawn_blocked((row, col), board, "B"):
@@ -182,7 +59,27 @@ def evaluate_board(board, player_color):
     # black_score += bitboard_clear_path_score(black_pawns_bitboard, white_pawns_bitboard, "B")
 
     # Return score relative to player color
+    print(white_score - black_score if player_color == "W" else black_score - white_score)
     return white_score - black_score if player_color == "W" else black_score - white_score
+
+
+
+def is_hanging_pawn(board, pos, player_color):
+    """Check if a pawn is unprotected and can be captured next turn."""
+    row, col = pos
+    opponent_color = "B" if player_color == "W" else "W"
+    opponent_pawn = "bp" if player_color == "W" else "wp"
+    direction = -1 if player_color == "W" else 1  # Direction opponent moves
+
+    # Check if opponent can capture diagonally
+    for dc in [-1, 1]:  # Left and right diagonal captures
+        new_row, new_col = row + direction, col + dc
+        if 0 <= new_row < 8 and 0 <= new_col < 8:
+            if board.boardArray[new_row][new_col] == opponent_pawn:
+                return True  # Pawn is hanging (can be captured)
+
+    return False
+
 
 
 def is_passed_pawn(pos, board, player_color):
@@ -236,8 +133,6 @@ def is_en_passant_possible(board, pos, player_color):
                     if 0 <= capture_row < 8 and board.boardArray[capture_row][col] == "--":
                         return True  # En Passant is possible
     return False
-
-
 
 # Generate All Valid Moves for a Given Color
 def get_all_moves(board, player_color):
@@ -343,23 +238,56 @@ def move_to_notation(move):
     start, end = move
     return f"{chr(97 + start[1])}{8 - start[0]}{chr(97 + end[1])}{8 - end[0]}"
 
+#order moves 
+def order_moves(board, moves, player_color):
+    """Sort moves based on heuristics for better Alpha-Beta pruning."""
+    
+    def move_score(move):
+        start, end = move
+        row, col = end
+        piece = board.boardArray[row][col]
+        
+        score = 0
+        
+        # Prioritize promotions
+        if (player_color == "W" and row == 0) or (player_color == "B" and row == 7):
+            score += 10000  
+        
+        # Prioritize captures
+        if piece in ["wp", "bp"]:  
+            score += 500  
+        
+        # Encourage advancing pawns forward
+        score += (6 - row) if player_color == "W" else row  
+
+        # Block opponent pawns
+        if player_color == "W":
+            if row > 0 and board.boardArray[row - 1][col] == "bp":
+                score += 200
+        else:
+            if row < 7 and board.boardArray[row + 1][col] == "wp":
+                score += 200  
+
+        return -score  # Sort descending
+    
+    return sorted(moves, key=move_score)
 
 
 
 def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     opponent_color = "B" if player_color == "W" else "W"
     current_color = player_color if maximizing_player else opponent_color
-
+    print(current_color)
 
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
             return CHECKMATE if maximizing_player else LOSE, None
-        return evaluate_board(board, current_color), None
-
+        return evaluate_board(board, player_color), None
 
     best_move = None
     moves = get_all_moves(board,current_color)
-    
+    moves = order_moves(board, moves, current_color)  # Sort moves before evaluating
+
     if maximizing_player:
         max_eval = float('-inf')
         for move in moves:
@@ -391,6 +319,50 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
 
         return min_eval, best_move
 
+  
+  
+def iterative_deepening_minimax(board, max_depth, player_color, time_limit=100):
+    """
+    Performs Iterative Deepening Search for Minimax with Alpha-Beta Pruning.
+    - Starts with depth 1 and increases until max_depth or time runs out.
+    - Always keeps the best move found so far.
+    - Returns the best move it found before the time expired.
+
+    Args:
+        board: The current game board.
+        max_depth: The maximum search depth allowed.
+        player_color: The color of the agent ("W" or "B").
+        time_limit: The maximum time allowed for searching (in seconds).
+
+    Returns:
+        (best_eval, best_move): The best evaluation and best move found before time ran out.
+    """
+    start_time = time.time()
+    best_move = None
+
+    for depth in range(1, max_depth + 1):
+        # Run Minimax at increasing depths
+        elapsed_time = time.time() - start_time
+        if elapsed_time >= time_limit:
+            break  # Stop searching if time runs out
+
+        print(f"🔍 Searching at depth: {depth}")
+
+        eval_score, move = minimax(board, depth, -CHECKMATE, CHECKMATE, True, player_color)
+
+        if move:
+            best_move = move  # Keep track of the best move found
+            best_eval = eval_score
+
+            print(f"✅ Depth {depth} Best Move: {move_to_notation(move)} | Eval: {eval_score}")
+
+        # 🏆 If a winning move is found (Checkmate), stop immediately
+        if eval_score >= CHECKMATE - 1000 or eval_score <= LOSE + 1000:
+            print(f"🏆 Checkmate move found at depth {depth}! Stopping search early.")
+            break  
+        
+    print("🛑 Time expired or reached max depth!")
+    return best_move  # Return the last best move found
     
 def main():
 
@@ -440,7 +412,9 @@ def main():
             
             print("--------------------------------")
             print("Agent is thinking...")
-            _, move =minimax(board, depth=8, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
+            # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
+            move = iterative_deepening_minimax(board, max_depth=3, player_color=player_color, time_limit=1000)
+
             # ✅ Convert the move to chess notation
    
             move_notation = move_to_notation(move)

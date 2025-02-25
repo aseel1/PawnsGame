@@ -100,7 +100,7 @@ def start_server():
             # pygame.init()
             # surface = pygame.display.set_mode([600, 600])
             # pygame.display.set_caption("Pawn Chess - Client vs Client")
-            # Board = ChessBoard()
+            Board = ChessBoard()
             # UI = UserInterface(surface, Board , player_color=server_color)
     else:
         print("Invalid selection.")

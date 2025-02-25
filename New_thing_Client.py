@@ -16,6 +16,7 @@ def evaluate_board(board, player_color):
     - Clear paths to promotion using bitboard are rewarded.
     - Score adjusts based on rank (advancement).
     """
+    print("Evaluating board...", player_color)
     white_score = 0
     black_score = 0
 
@@ -43,7 +44,7 @@ def evaluate_board(board, player_color):
 
             # Black pawns
             elif piece == "bp":
-                black_score += 10 + row * 2  # Base and advancement reward
+                black_score += 10 + (row-1)* 2  # Base and advancement reward
                 if is_passed_pawn((row, col), board, "B"):
                     black_score += 15
                 if is_pawn_blocked((row, col), board, "B"):
@@ -276,12 +277,12 @@ def order_moves(board, moves, player_color):
 def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     opponent_color = "B" if player_color == "W" else "W"
     current_color = player_color if maximizing_player else opponent_color
+    print(current_color)
 
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
             return CHECKMATE if maximizing_player else LOSE, None
-        return evaluate_board(board, current_color), None
-
+        return evaluate_board(board, player_color), None
 
     best_move = None
     moves = get_all_moves(board,current_color)
@@ -412,7 +413,7 @@ def main():
             print("--------------------------------")
             print("Agent is thinking...")
             # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
-            move = iterative_deepening_minimax(board, max_depth=8, player_color=player_color, time_limit=1000)
+            move = iterative_deepening_minimax(board, max_depth=3, player_color=player_color, time_limit=1000)
 
             # ✅ Convert the move to chess notation
    
