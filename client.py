@@ -277,7 +277,10 @@ def order_moves(board, moves, player_color):
 def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     opponent_color = "B" if player_color == "W" else "W"
     current_color = player_color if maximizing_player else opponent_color
+<<<<<<< HEAD
     print(current_color)
+=======
+>>>>>>> 805c2621b457510475223bc54a084889549d019d
 
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
@@ -413,7 +416,11 @@ def main():
             print("--------------------------------")
             print("Agent is thinking...")
             # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
+<<<<<<< HEAD
             move = iterative_deepening_minimax(board, max_depth=3, player_color=player_color, time_limit=1000)
+=======
+            move = iterative_deepening_minimax(board, max_depth=8, player_color=player_color, time_limit=1000)
+>>>>>>> 805c2621b457510475223bc54a084889549d019d
 
             # ✅ Convert the move to chess notation
    
