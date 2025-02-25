@@ -354,7 +354,7 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
             return CHECKMATE if maximizing_player else LOSE, None
-        return evaluate_board(board, player_color), None
+        return evaluate_board(board, current_color), None
 
 
     best_move = None

@@ -96,12 +96,12 @@ def start_server():
             clients[1].send("Color B".encode())  # Player 2 is Black
             wait_for_ok(clients[1], "color assignment for Player 2")
             
-            #! Initialize Pygame for Client vs Client GUI
-            pygame.init()
-            surface = pygame.display.set_mode([600, 600])
-            pygame.display.set_caption("Pawn Chess - Client vs Client")
-            Board = ChessBoard()
-            UI = UserInterface(surface, Board , player_color=server_color)
+            # #! Initialize Pygame for Client vs Client GUI
+            # pygame.init()
+            # surface = pygame.display.set_mode([600, 600])
+            # pygame.display.set_caption("Pawn Chess - Client vs Client")
+            # Board = ChessBoard()
+            # UI = UserInterface(surface, Board , player_color=server_color)
     else:
         print("Invalid selection.")
         return

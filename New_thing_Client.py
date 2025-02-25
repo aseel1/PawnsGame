@@ -34,6 +34,8 @@ def evaluate_board(board, player_color):
                     white_score += 15
                 if is_pawn_blocked((row, col), board, "W"):
                     white_score -= 5
+                   
+                    
 
                 # Check for En Passant vulnerability
                 if is_en_passant_possible(board, (row, col), "W"):
@@ -56,7 +58,27 @@ def evaluate_board(board, player_color):
     # black_score += bitboard_clear_path_score(black_pawns_bitboard, white_pawns_bitboard, "B")
 
     # Return score relative to player color
+    print(white_score - black_score if player_color == "W" else black_score - white_score)
     return white_score - black_score if player_color == "W" else black_score - white_score
+
+
+
+def is_hanging_pawn(board, pos, player_color):
+    """Check if a pawn is unprotected and can be captured next turn."""
+    row, col = pos
+    opponent_color = "B" if player_color == "W" else "W"
+    opponent_pawn = "bp" if player_color == "W" else "wp"
+    direction = -1 if player_color == "W" else 1  # Direction opponent moves
+
+    # Check if opponent can capture diagonally
+    for dc in [-1, 1]:  # Left and right diagonal captures
+        new_row, new_col = row + direction, col + dc
+        if 0 <= new_row < 8 and 0 <= new_col < 8:
+            if board.boardArray[new_row][new_col] == opponent_pawn:
+                return True  # Pawn is hanging (can be captured)
+
+    return False
+
 
 
 def is_passed_pawn(pos, board, player_color):
@@ -215,6 +237,39 @@ def move_to_notation(move):
     start, end = move
     return f"{chr(97 + start[1])}{8 - start[0]}{chr(97 + end[1])}{8 - end[0]}"
 
+#order moves 
+def order_moves(board, moves, player_color):
+    """Sort moves based on heuristics for better Alpha-Beta pruning."""
+    
+    def move_score(move):
+        start, end = move
+        row, col = end
+        piece = board.boardArray[row][col]
+        
+        score = 0
+        
+        # Prioritize promotions
+        if (player_color == "W" and row == 0) or (player_color == "B" and row == 7):
+            score += 10000  
+        
+        # Prioritize captures
+        if piece in ["wp", "bp"]:  
+            score += 500  
+        
+        # Encourage advancing pawns forward
+        score += (6 - row) if player_color == "W" else row  
+
+        # Block opponent pawns
+        if player_color == "W":
+            if row > 0 and board.boardArray[row - 1][col] == "bp":
+                score += 200
+        else:
+            if row < 7 and board.boardArray[row + 1][col] == "wp":
+                score += 200  
+
+        return -score  # Sort descending
+    
+    return sorted(moves, key=move_score)
 
 
 
@@ -225,12 +280,13 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
             return CHECKMATE if maximizing_player else LOSE, None
-        return evaluate_board(board, player_color), None
+        return evaluate_board(board, current_color), None
 
 
     best_move = None
     moves = get_all_moves(board,current_color)
-    
+    moves = order_moves(board, moves, current_color)  # Sort moves before evaluating
+
     if maximizing_player:
         max_eval = float('-inf')
         for move in moves:
@@ -297,7 +353,7 @@ def iterative_deepening_minimax(board, max_depth, player_color, time_limit=100):
             best_move = move  # Keep track of the best move found
             best_eval = eval_score
 
-            print(f"✅ Depth {depth} Best Move: {move} | Eval: {eval_score}")
+            print(f"✅ Depth {depth} Best Move: {move_to_notation(move)} | Eval: {eval_score}")
 
         # 🏆 If a winning move is found (Checkmate), stop immediately
         if eval_score >= CHECKMATE - 1000 or eval_score <= LOSE + 1000:
@@ -356,7 +412,7 @@ def main():
             print("--------------------------------")
             print("Agent is thinking...")
             # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
-            move = iterative_deepening_minimax(board, max_depth=8, player_color=player_color, time_limit=10)
+            move = iterative_deepening_minimax(board, max_depth=8, player_color=player_color, time_limit=1000)
 
             # ✅ Convert the move to chess notation
    
