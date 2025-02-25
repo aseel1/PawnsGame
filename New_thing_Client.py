@@ -16,7 +16,6 @@ def evaluate_board(board, player_color):
     - Clear paths to promotion using bitboard are rewarded.
     - Score adjusts based on rank (advancement).
     """
-    print("Evaluating board...", player_color)
     white_score = 0
     black_score = 0
 
@@ -59,7 +58,6 @@ def evaluate_board(board, player_color):
     # black_score += bitboard_clear_path_score(black_pawns_bitboard, white_pawns_bitboard, "B")
 
     # Return score relative to player color
-    print(white_score - black_score if player_color == "W" else black_score - white_score)
     return white_score - black_score if player_color == "W" else black_score - white_score
 
 
@@ -175,6 +173,7 @@ def get_all_moves(board, player_color):
                                 if (player_color == "W" and row == 3 and board.boardArray[row + 1][new_col] == opponent_pawn) or \
                                    (player_color == "B" and row == 4 and board.boardArray[row - 1][new_col] == opponent_pawn):
                                     moves.append(((row, col), (row + direction, new_col)))
+                                    print("found it el passant")
 
     return moves
 
@@ -229,6 +228,9 @@ def apply_move(board, move, player_color):
     new_board = ChessBoard()
     new_board.boardArray = [row[:] for row in board.boardArray]  # Deep copy
 
+
+    new_board.last_move = move  #!new Track the last move
+
     start, end = move
     new_board.move_pawn(start, end, player_color, simulate=True)  # 🔥 Disable printing during simulation
     return new_board
@@ -277,7 +279,6 @@ def order_moves(board, moves, player_color):
 def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     opponent_color = "B" if player_color == "W" else "W"
     current_color = player_color if maximizing_player else opponent_color
-    print(current_color)
 
     if depth == 0 or board.is_game_over_2(current_color):
         if board.is_game_over_2(current_color):
@@ -413,7 +414,7 @@ def main():
             print("--------------------------------")
             print("Agent is thinking...")
             # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
-            move = iterative_deepening_minimax(board, max_depth=3, player_color=player_color, time_limit=1000)
+            move = iterative_deepening_minimax(board, max_depth=10, player_color=player_color, time_limit=1000)
 
             # ✅ Convert the move to chess notation
    
