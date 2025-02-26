@@ -31,7 +31,7 @@ def evaluate_board(board, player_color):
             if piece == "wp":
                 white_score += 10 + (6 - row) * 2  # Base and advancement reward
                 if is_passed_pawn((row, col), board, "W"):
-                    white_score += 15
+                    white_score += 25
                 if is_pawn_blocked((row, col), board, "W"):
                     white_score -= 5
                    
@@ -45,7 +45,7 @@ def evaluate_board(board, player_color):
             elif piece == "bp":
                 black_score += 10 + (row-1)* 2  # Base and advancement reward
                 if is_passed_pawn((row, col), board, "B"):
-                    black_score += 15
+                    black_score += 25
                 if is_pawn_blocked((row, col), board, "B"):
                     black_score -= 5
 
@@ -58,6 +58,11 @@ def evaluate_board(board, player_color):
     # black_score += bitboard_clear_path_score(black_pawns_bitboard, white_pawns_bitboard, "B")
 
     # Return score relative to player color
+   
+    #? prints for debugging 
+    # print(white_score - black_score if player_color == "W" else black_score - white_score)
+    # print(board.print_board())
+    
     return white_score - black_score if player_color == "W" else black_score - white_score
 
 
@@ -111,25 +116,37 @@ def is_pawn_blocked(pos, board, player_color):
         return True
     return False
 
+#! this penalize the opponent if he played en passant and i can eat him...
 def is_en_passant_possible(board, pos, player_color):
     """
-    Check if a pawn is vulnerable to or can perform an En Passant move.
+    Check if a pawn is VULNERABLE to an En Passant capture.
     """
     row, col = pos
-    direction = -1 if player_color == "W" else 1
-    opponent_pawn = "bp" if player_color == "W" else "wp"
-    en_passant_row = 3 if player_color == "W" else 4
+    if board.en_passant_target is None:
+        return False
 
-    # Check for En Passant vulnerability
-    if row == en_passant_row:
-        for dc in [-1, 1]:
-            adjacent_col = col + dc
-            if 0 <= adjacent_col < 8:
-                # Check if opponent pawn moved two steps forward
-                if board.boardArray[row][adjacent_col] == opponent_pawn:
-                    capture_row = row + direction
-                    if 0 <= capture_row < 8 and board.boardArray[capture_row][col] == "--":
-                        return True  # En Passant is possible
+    target_row, target_col = board.en_passant_target
+
+    # Determine if this pawn is the one that moved two squares and is vulnerable
+    if player_color == "W":
+        # White pawn moved two squares (from row 6 to 4). Vulnerable if on row 4.
+        if row != 4 or col != target_col:
+            return False
+        # Check adjacent Black pawns (bp) on row 4
+        opponent_pawn = "bp"
+    else:
+        # Black pawn moved two squares (from row 1 to 3). Vulnerable if on row 3.
+        if row != 3 or col != target_col:
+            return False
+        # Check adjacent White pawns (wp) on row 3
+        opponent_pawn = "wp"
+
+    # Check adjacent columns for opponent pawns
+    for dc in [-1, 1]:
+        adjacent_col = col + dc
+        if 0 <= adjacent_col < 8 and board.boardArray[row][adjacent_col] == opponent_pawn:
+            return True
+
     return False
 
 # Generate All Valid Moves for a Given Color
@@ -169,12 +186,18 @@ def get_all_moves(board, player_color):
                         new_col = col + dc
                         if 0 <= new_col < 8:
                             if board.boardArray[row][new_col] == opponent_pawn:
-                                # Check if the opponent's pawn just moved two squares forward
-                                if (player_color == "W" and row == 3 and board.boardArray[row + 1][new_col] == opponent_pawn) or \
-                                   (player_color == "B" and row == 4 and board.boardArray[row - 1][new_col] == opponent_pawn):
-                                    moves.append(((row, col), (row + direction, new_col)))
-                                    print("found it el passant")
+                                # Check if the opponent's pawn JUST moved two squares
+                                if board.last_move:
+                                    last_start, last_end = board.last_move
+                                    last_start_row, last_start_col = last_start
+                                    last_end_row, last_end_col = last_end
+                                    # Verify two-square move and adjacency
+                                    if (last_end_row == row and last_end_col == new_col) and \
+                                    abs(last_start_row - last_end_row) == 2:
+                                        moves.append(((row, col), (row + direction, new_col)))
 
+    # print(f"Total moves generated: {len(moves)}")
+    # print(moves)
     return moves
 
 def generate_bitboard(board, pawn_type):
@@ -227,12 +250,10 @@ def apply_move(board, move, player_color):
     """Apply a move to the board and return a new board state."""
     new_board = ChessBoard()
     new_board.boardArray = [row[:] for row in board.boardArray]  # Deep copy
-
-
-    new_board.last_move = move  #!new Track the last move
-
+    new_board.last_move = board.last_move  # Copy last move
+    new_board.en_passant_target = board.en_passant_target  # 🚨 Copy En Passant target
     start, end = move
-    new_board.move_pawn(start, end, player_color, simulate=True)  # 🔥 Disable printing during simulation
+    new_board.move_pawn(start, end, player_color, simulate=True)
     return new_board
 
 # Convert a Move to Chess Notation (e.g., e2e4)
@@ -414,7 +435,7 @@ def main():
             print("--------------------------------")
             print("Agent is thinking...")
             # _, move =minimax(board, depth=4, alpha=LOSE, beta=CHECKMATE, maximizing_player=True, player_color=player_color)
-            move = iterative_deepening_minimax(board, max_depth=10, player_color=player_color, time_limit=1000)
+            move = iterative_deepening_minimax(board, max_depth=8, player_color=player_color, time_limit=1000)
 
             # ✅ Convert the move to chess notation
    
