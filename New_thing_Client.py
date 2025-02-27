@@ -35,7 +35,10 @@ def evaluate_board(board, player_color):
                 if is_pawn_blocked((row, col), board, "W"):
                     white_score -= 5
                    
-                    
+                # Check if this pawn can be captured next turn
+                if is_hanging_pawn(board, (row, col), "W"):
+                    white_score -= 30  # or -50, or any penalty you prefer
+      
 
                 # Check for En Passant vulnerability
                 if is_en_passant_possible(board, (row, col), "W"):
@@ -49,6 +52,10 @@ def evaluate_board(board, player_color):
                 if is_pawn_blocked((row, col), board, "B"):
                     black_score -= 5
 
+                # Check if this pawn can be captured next turn
+                if is_hanging_pawn(board, (row, col), "B"):
+                    black_score -= 30
+                    
                 # Check for En Passant vulnerability
                 if is_en_passant_possible(board, (row, col), "B"):
                     black_score -= 50  # Penalize for vulnerability
