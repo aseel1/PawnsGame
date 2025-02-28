@@ -28,6 +28,7 @@ class ChessBoard:
         self.enpassantCol = -1
         self.en_passant_target = None  # Add this attribute
         self.round = 0
+        self.last_move = None
 
 
 
