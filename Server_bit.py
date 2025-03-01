@@ -1,7 +1,7 @@
 import socket
 import pygame
-from board import ChessBoard
-from UserInterface import UserInterface
+from Board_bit import ChessBoardChessBoard_Bit
+from UserInterface_bit import UserInterface
 
 clients = []
 
@@ -72,7 +72,7 @@ def start_server():
         pygame.init()
         surface = pygame.display.set_mode([600, 600])
         pygame.display.set_caption("Pawn Chess - Server")
-        Board = ChessBoard()
+        Board = ChessBoardChessBoard_Bit()
         UI = UserInterface(surface, Board, player_color=server_color)
 
         
@@ -100,7 +100,7 @@ def start_server():
             pygame.init()
             surface = pygame.display.set_mode([600, 600])
             pygame.display.set_caption("Pawn Chess - Client vs Client")
-            Board = ChessBoard()
+            Board = ChessBoardChessBoard_Bit()
             UI = UserInterface(surface, Board , player_color=server_color)
     else:
         print("Invalid selection.")

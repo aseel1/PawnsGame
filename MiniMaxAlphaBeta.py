@@ -207,48 +207,6 @@ def get_all_moves(board, player_color):
     # print(moves)
     return moves
 
-def generate_bitboard(board, pawn_type):
-    """
-    Generate a bitboard for pawns of the specified type ('wp' or 'bp').
-    Each bit represents a square on the board, where 1 indicates the presence of the pawn.
-    """
-    bitboard = 0
-    for row in range(8):
-        for col in range(8):
-            if board.boardArray[row][col] == pawn_type:
-                bitboard |= (1 << (row * 8 + col))
-    return bitboard
-
-def bitboard_clear_path_score(player_bitboard, opponent_bitboard, player_color):
-    """
-    Evaluate clear paths to promotion for a given player's pawns using bitboards.
-    """
-    direction = -1 if player_color == "W" else 1
-    promotion_row = 0 if player_color == "W" else 7
-    score = 0
-
-    for position in range(64):
-        if player_bitboard & (1 << position):
-            row = position // 8
-            col = position % 8
-
-            # Check for a clear path to promotion
-            clear_path = True
-            for r in range(row + direction, promotion_row + direction, direction):
-                if r < 0 or r >= 8:
-                    break
-                if opponent_bitboard & (1 << (r * 8 + col)):
-                    clear_path = False
-                    break
-
-            # Reward pawns with a clear path
-            if clear_path:
-                score += 1000  # Strong reward for guaranteed promotion
-            else:
-                # Penalize if blocked
-                score -= 50
-
-    return score
 
 
 

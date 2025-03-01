@@ -48,21 +48,27 @@ class UserInterface:
             for col in range(8):
                 color = WHITE if (row + col) % 2 == 0 else BLACK
                 pygame.draw.rect(self.surface, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
-
+####### UserInterface.py Updates end                
     def draw_pieces(self):
-        """Draw the pawns on the board."""
-        for row in range(8):
-            for col in range(8):
-                piece = self.chessboard.boardArray[row][col]
-                if piece == "wp":
-                    pygame.draw.circle(self.surface, (255, 255, 255), 
-                        (col * SQUARE_SIZE + SQUARE_SIZE // 2, row * SQUARE_SIZE + SQUARE_SIZE // 2), SQUARE_SIZE // 3)
-                elif piece == "bp":
-                    pygame.draw.circle(self.surface, (0, 0, 0), 
-                        (col * SQUARE_SIZE + SQUARE_SIZE // 2, row * SQUARE_SIZE + SQUARE_SIZE // 2), SQUARE_SIZE // 3)
-
+        white_pawns = self.chessboard.white_pawns
+        black_pawns = self.chessboard.black_pawns
+        
+        for pos in range(64):
+            row = pos // 8
+            col = pos % 8
+            if white_pawns & (1 << pos):
+                pygame.draw.circle(self.surface, (255, 255, 255),
+                    (col * SQUARE_SIZE + SQUARE_SIZE//2, 
+                    row * SQUARE_SIZE + SQUARE_SIZE//2), 
+                    SQUARE_SIZE//3)
+            elif black_pawns & (1 << pos):
+                pygame.draw.circle(self.surface, (0, 0, 0),
+                    (col * SQUARE_SIZE + SQUARE_SIZE//2,
+                    row * SQUARE_SIZE + SQUARE_SIZE//2),
+                    SQUARE_SIZE//3)
+                
     def clientMove(self):
-        """Handle user moves."""
+        """Handle user moves using bitboard checks."""
         move = None
         flag = 0
         waiting_for_move = True
@@ -74,28 +80,33 @@ class UserInterface:
                     flag = -1
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
-                    col, row = pos[0] // SQUARE_SIZE, pos[1] // SQUARE_SIZE
-                    #! print(f"Mouse clicked at: {pos}, translated to board position: ({row}, {col})")
+                    col = pos[0] // SQUARE_SIZE
+                    row = pos[1] // SQUARE_SIZE
+                    bit_position = 1 << (row * 8 + col)
 
                     if self.selected_square:
                         start_row, start_col = self.selected_square
-                       #! print(f"Selected square: {self.selected_square}, attempting to move to: ({row}, {col})")
-                        if self.chessboard.move_pawn((start_row, start_col), (row, col), self.playerColor ):
+                        # Convert to bitboard coordinates
+                        success = self.chessboard.move_pawn(
+                            (start_row, start_col),
+                            (row, col),
+                            self.playerColor
+                        )
+                        if success:
                             move = (start_row, start_col, row, col)
                             waiting_for_move = False
-                          #!  print(f"Move successful: {move}")
                         else:
                             print("Invalid move")
                         self.selected_square = None
-                    elif self.chessboard.boardArray[row][col] in ["wp", "bp"]:
-                        self.selected_square = (row, col)
-                     #!   print(f"Piece selected at: {self.selected_square}")
-            
+                    else:
+                        # Check if clicked square contains player's pawn using bitboard
+                        if (self.playerColor == "W" and (self.chessboard.white_pawns & bit_position)) or \
+                        (self.playerColor == "B" and (self.chessboard.black_pawns & bit_position)):
+                            self.selected_square = (row, col)
+                
             self.drawComponent()
 
         return move, flag
-
-
 
 
 

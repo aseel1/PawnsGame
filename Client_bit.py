@@ -2,7 +2,7 @@ import random
 import socket
 import pygame
 import time
-from board import ChessBoard
+from Board_bit import ChessBoardChessBoard_Bit
 
 CHECKMATE = 100000000000
 LOSE =     -100000000000
@@ -12,201 +12,245 @@ LOSE =     -100000000000
 # ---------------------------
 transposition_table = {}
 
+# ---------------------------
+# Transposition Table Setup (Bitboard Version)
+# ---------------------------
 def board_hash(board):
-    """
-    Create a hashable representation of the board state.
-    We use a tuple of tuples for board.boardArray, along with en_passant_target and last_move.
-    """
-    board_tuple = tuple(tuple(row) for row in board.boardArray)
-    return (board_tuple, board.en_passant_target, board.last_move)
+    """Create hash for bitboard-based chess board"""
+    return (
+        board.white_pawns, 
+        board.black_pawns,
+        board.en_passant_target,
+        board.last_move
+    )
 
 # ---------------------------
-# Evaluation & Utility Functions
+# Evaluation & Utility Functions (Bitboard Version)
 # ---------------------------
 def evaluate_board(board, player_color):
-    """
-    Evaluate the board based on pawn game principles.
-    - Passed pawns are rewarded.
-    - Blocked pawns are penalized.
-    - Clear paths to promotion are rewarded.
-    - En passant vulnerability is penalized.
-    """
+    """Evaluate board state using bitboard features"""
     white_score = 0
     black_score = 0
+    
+    # Material count (base value)
+    white_material = bin(board.white_pawns).count('1') * 100
+    black_material = bin(board.black_pawns).count('1') * 100
+    white_score += white_material
+    black_score += black_material
 
-    for row in range(8):
-        for col in range(8):
-            piece = board.boardArray[row][col]
-            # White pawns
-            if piece == "wp":
-                white_score += 10 + (6 - row) * 2  # Base + advancement
-                if is_passed_pawn((row, col), board, "W"):
-                    white_score += 15
-                if is_pawn_blocked((row, col), board, "W"):
-                    white_score -= 5
-                if is_en_passant_possible(board, (row, col), "W"):
-                    white_score -= 50
-            # Black pawns
-            elif piece == "bp":
-                black_score += 10 + (row - 1) * 2
-                if is_passed_pawn((row, col), board, "B"):
-                    black_score += 15
-                if is_pawn_blocked((row, col), board, "B"):
-                    black_score -= 5
-                if is_en_passant_possible(board, (row, col), "B"):
-                    black_score -= 50
+    # Process white pawn features
+    white_pawns = board.white_pawns
+    while white_pawns:
+        lsb = white_pawns & -white_pawns
+        pos = lsb.bit_length() - 1
+        row, col = divmod(pos, 8)
+        
+        # Only process valid positions
+        if not (0 <= row < 8 and 0 <= col < 8):
+            white_pawns ^= lsb
+            continue
 
-    result = white_score - black_score if player_color == "W" else black_score - white_score
-    return result
+        # Advancement bonus (closer to promotion)
+        white_score += (7 - row) * 2  # Max 12 points for 7th rank
+        
+        # Blocked penalty (fixed syntax)
+        if row > 0:  # Prevent checking row -1
+            forward_pos = pos - 8
+            if 0 <= forward_pos < 64:
+                # Corrected bitwise operation with proper parentheses
+                if (1 << forward_pos) & (board.white_pawns | board.black_pawns):
+                    white_score -= 30
+        
+        # Passed pawn check
+        file_mask = 0x0101010101010101 << col
+        ahead_mask = ~((1 << (pos + 8)) - 1)
+        if not (board.black_pawns & file_mask & ahead_mask):
+            white_score += 50
+            
+        # Hanging pawn check
+        hanging = False
+        for dc in [-1, 1]:
+            attack_col = col + dc
+            if 0 <= attack_col < 8:
+                attack_pos = pos - 8 + dc
+                if 0 <= attack_pos < 64:
+                    if board.black_pawns & (1 << attack_pos):
+                        white_score -= 50
+                        hanging = True
+                        break
+            
+        # En passant vulnerability
+        if not hanging and board.en_passant_target:
+            ep_pos = board.en_passant_target.bit_length() - 1
+            if row == 3 and abs(col - (ep_pos % 8)) == 1:
+                white_score -= 30
 
+        white_pawns ^= lsb
+
+    # Process black pawn features (similar fixes applied)
+    black_pawns = board.black_pawns
+    while black_pawns:
+        lsb = black_pawns & -black_pawns
+        pos = lsb.bit_length() - 1
+        row, col = divmod(pos, 8)
+        
+        if not (0 <= row < 8 and 0 <= col < 8):
+            black_pawns ^= lsb
+            continue
+
+        black_score += row * 2
+        
+        if row < 7:
+            forward_pos = pos + 8
+            if 0 <= forward_pos < 64:
+                if (1 << forward_pos) & (board.white_pawns | board.black_pawns):
+                    black_score -= 30
+        
+        file_mask = 0x0101010101010101 << col
+        ahead_mask = (1 << pos) - 1
+        if not (board.white_pawns & file_mask & ahead_mask):
+            black_score += 50
+            
+        hanging = False
+        for dc in [-1, 1]:
+            attack_col = col + dc
+            if 0 <= attack_col < 8:
+                attack_pos = pos + 8 + dc
+                if 0 <= attack_pos < 64:
+                    if board.white_pawns & (1 << attack_pos):
+                        black_score -= 50
+                        hanging = True
+                        break
+            
+        if not hanging and board.en_passant_target:
+            ep_pos = board.en_passant_target.bit_length() - 1
+            if row == 4 and abs(col - (ep_pos % 8)) == 1:
+                black_score -= 30
+
+        black_pawns ^= lsb
+
+    final_score = white_score - black_score
+    return final_score if player_color == "W" else -final_score
+
+
+def passed_pawns_score(pawns, opponent_pawns, color):
+    """Calculate passed pawns score using bitwise operations"""
+    score = 0
+    mask = pawns
+    while mask:
+        lsb = mask & -mask
+        pos = lsb.bit_length() - 1
+        col = pos % 8
+        row = pos // 8
+        
+        # Check if pawn is passed
+        file_mask = 0x0101010101010101 << col
+        ahead_mask = (0xFFFFFFFFFFFFFFFF << (pos + 8)) if color == "W" else (0xFFFFFFFFFFFFFFFF >> (64 - pos))
+        if not (opponent_pawns & file_mask & ahead_mask):
+            score += 50
+            
+        mask ^= lsb
+    return score
+
+# Remove or update these legacy functions that use boardArray
 def is_hanging_pawn(board, pos, player_color):
-    """Check if a pawn is unprotected and can be captured next turn."""
+    """Check if a pawn is unprotected using bitboards"""
     row, col = pos
-    opponent_pawn = "bp" if player_color == "W" else "wp"
-    direction = -1 if player_color == "W" else 1  # opponent moves toward our side
+    pos_bit = 1 << (row * 8 + col)
+    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+    direction = 1 if player_color == "W" else -1
+    
+    # Check diagonal attacks
     for dc in [-1, 1]:
-        new_row, new_col = row + direction, col + dc
-        if 0 <= new_row < 8 and 0 <= new_col < 8:
-            if board.boardArray[new_row][new_col] == opponent_pawn:
+        attack_row = row + direction
+        attack_col = col + dc
+        if 0 <= attack_col < 8:
+            attack_bit = 1 << (attack_row * 8 + attack_col)
+            if opponent_pawns & attack_bit:
                 return True
     return False
 
 def is_passed_pawn(pos, board, player_color):
-    """
-    Check if a pawn is passed (no opponent pawn blocks its file or adjacent files ahead).
-    """
+    """Check passed pawn using bitboard operations"""
     row, col = pos
-    direction = -1 if player_color == "W" else 1
-    opponent_pawn = "bp" if player_color == "W" else "wp"
-    for dc in [-1, 0, 1]:
-        new_col = col + dc
-        if 0 <= new_col < 8:
-            check_row = row + direction
-            while 0 <= check_row < 8:
-                if board.boardArray[check_row][new_col] == opponent_pawn:
-                    return False
-                check_row += direction
-    return True
+    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+    file_mask = 0x0101010101010101 << col
+    ahead_mask = ~((1 << (row * 8)) - 1) if player_color == "W" else ((1 << (row * 8)) - 1)
+    return not (opponent_pawns & file_mask & ahead_mask)
 
 def is_pawn_blocked(pos, board, player_color):
-    """
-    Check if a pawn cannot move forward because the square ahead is occupied.
-    """
+    """Check blocked pawn using bitboards"""
     row, col = pos
     direction = -1 if player_color == "W" else 1
-    forward_row = row + direction
-    if 0 <= forward_row < 8 and board.boardArray[forward_row][col] != "--":
-        return True
-    return False
+    forward_bit = 1 << ((row + direction) * 8 + col)
+    all_pawns = board.white_pawns | board.black_pawns
+    return bool(all_pawns & forward_bit)
 
 def is_en_passant_possible(board, pos, player_color):
-    """
-    Check if a pawn is vulnerable to an en passant capture.
-    Standard rules:
-      - When a white pawn moves two squares from row 6 to row 4,
-        board.en_passant_target is set to the skipped square (row 5, col).
-        A black pawn must be on row 4 adjacent to that target to capture.
-      - When a black pawn moves two squares from row 1 to row 3,
-        board.en_passant_target is set to (row 2, col),
-        and a white pawn must be on row 3 adjacent to that target.
-    """
-    row, col = pos
-    if board.en_passant_target is None:
+    """Check en passant using bitboard data"""
+    if not board.en_passant_target:
         return False
-    target_row, target_col = board.en_passant_target
+    
+    row, col = pos
+    ep_pos = board.en_passant_target.bit_length() - 1
+    ep_row, ep_col = divmod(ep_pos, 8)
+    
     if player_color == "W":
-        if row != 4 or col != target_col:
-            return False
-        for dc in [-1, 1]:
-            adj = col + dc
-            if 0 <= adj < 8 and board.boardArray[row][adj] == "bp":
-                return True
+        return row == 3 and ep_row == 2 and abs(col - ep_col) == 1
     else:
-        if row != 3 or col != target_col:
-            return False
-        for dc in [-1, 1]:
-            adj = col + dc
-            if 0 <= adj < 8 and board.boardArray[row][adj] == "wp":
-                return True
-    return False
+        return row == 4 and ep_row == 5 and abs(col - ep_col) == 1
+
 
 def get_all_moves(board, player_color):
-    """Generate all valid pawn moves for the given color."""
+    """Generate all valid pawn moves using bitboard operations"""
     moves = []
+    pawns = board.white_pawns if player_color == "W" else board.black_pawns
+    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
     direction = -1 if player_color == "W" else 1
-    pawn = "wp" if player_color == "W" else "bp"
-    en_passant_row = 3 if player_color == "W" else 4
-    opponent_pawn = "bp" if player_color == "W" else "wp"
+    all_pawns = pawns | opponent_pawns
 
-    for row in range(8):
-        for col in range(8):
-            if board.boardArray[row][col] == pawn:
-                if 0 <= row + direction < 8 and board.boardArray[row + direction][col] == "--":
-                    moves.append(((row, col), (row + direction, col)))
-                if (player_color == "W" and row == 6) or (player_color == "B" and row == 1):
-                    if (0 <= row + 2 * direction < 8 and
-                        board.boardArray[row + direction][col] == "--" and
-                        board.boardArray[row + 2 * direction][col] == "--"):
-                        moves.append(((row, col), (row + 2 * direction, col)))
-                for dc in [-1, 1]:
-                    new_row, new_col = row + direction, col + dc
-                    if 0 <= new_row < 8 and 0 <= new_col < 8:
-                        target = board.boardArray[new_row][new_col]
-                        if (player_color == "W" and target == "bp") or (player_color == "B" and target == "wp"):
-                            moves.append(((row, col), (new_row, new_col)))
-                if row == en_passant_row:
-                    for dc in [-1, 1]:
-                        new_col = col + dc
-                        if 0 <= new_col < 8:
-                            if board.boardArray[row][new_col] == opponent_pawn:
-                                if board.last_move:
-                                    last_start, last_end = board.last_move
-                                    last_start_row, _ = last_start
-                                    last_end_row, last_end_col = last_end
-                                    if (last_end_row == row and last_end_col == new_col and
-                                        abs(last_start_row - last_end_row) == 2):
-                                        moves.append(((row, col), (row + direction, new_col)))
+    # Iterate through all pawns using bitwise operations
+    while pawns:
+        lsb = pawns & -pawns
+        pos = lsb.bit_length() - 1
+        pawns ^= lsb
+        row, col = divmod(pos, 8)
+
+        # Single push
+        if (row + direction) >= 0 and (row + direction) < 8:
+            forward = pos + (direction * 8)
+            if not (all_pawns & (1 << forward)):
+                moves.append(((row, col), (row + direction, col)))
+
+        # Double push
+        if (player_color == "W" and row == 6) or (player_color == "B" and row == 1):
+            double_forward = pos + (2 * direction * 8)
+            if not (all_pawns & (1 << double_forward)) and not (all_pawns & (1 << (pos + direction * 8))):
+                moves.append(((row, col), (row + 2 * direction, col)))
+
+        # Captures
+        for dc in [-1, 1]:
+            if 0 <= col + dc < 8:
+                capture_pos = pos + direction * 8 + dc
+                if opponent_pawns & (1 << capture_pos):
+                    moves.append(((row, col), (row + direction, col + dc)))
+
+        # En passant
+        if board.en_passant_target:
+            ep_pos = board.en_passant_target.bit_length() - 1
+            ep_row, ep_col = divmod(ep_pos, 8)
+            if (player_color == "W" and row == 3 and ep_row == 2) or \
+               (player_color == "B" and row == 4 and ep_row == 5):
+                if abs(col - ep_col) == 1:
+                    moves.append(((row, col), (ep_row, ep_col)))
+
     return moves
-
-def generate_bitboard(board, pawn_type):
-    """Generate a bitboard for pawns of the specified type."""
-    bitboard = 0
-    for row in range(8):
-        for col in range(8):
-            if board.boardArray[row][col] == pawn_type:
-                bitboard |= (1 << (row * 8 + col))
-    return bitboard
-
-def bitboard_clear_path_score(player_bitboard, opponent_bitboard, player_color):
-    """Evaluate clear paths to promotion using bitboards."""
-    direction = -1 if player_color == "W" else 1
-    promotion_row = 0 if player_color == "W" else 7
-    score = 0
-    for position in range(64):
-        if player_bitboard & (1 << position):
-            row = position // 8
-            col = position % 8
-            clear_path = True
-            for r in range(row + direction, promotion_row + direction, direction):
-                if r < 0 or r >= 8:
-                    break
-                if opponent_bitboard & (1 << (r * 8 + col)):
-                    clear_path = False
-                    break
-            if clear_path:
-                score += 1000
-            else:
-                score -= 50
-    return score
-
 def apply_move(board, move, player_color):
-    """Return a new board state after applying the move."""
-    new_board = ChessBoard()
-    new_board.boardArray = [row[:] for row in board.boardArray]  # Deep copy
-    new_board.last_move = board.last_move  # Copy last move info
-    new_board.en_passant_target = board.en_passant_target  # Copy en passant target
+    new_board = ChessBoardChessBoard_Bit()
+    new_board.white_pawns = board.white_pawns
+    new_board.black_pawns = board.black_pawns
     start, end = move
-    new_board.move_pawn(start, end, player_color, simulate=True)
+    new_board.move_pawn(start, end, player_color)
     return new_board
 
 def move_to_notation(move):
@@ -214,26 +258,44 @@ def move_to_notation(move):
     return f"{chr(97 + start[1])}{8 - start[0]}{chr(97 + end[1])}{8 - end[0]}"
 
 def order_moves(board, moves, player_color):
-    """Sort moves based on heuristics for better alpha-beta pruning."""
+    """Sort moves based on bitboard heuristics"""
     def move_score(move):
-        start, end = move
-        row, col = end
-        piece = board.boardArray[row][col]
+        _, end = move
+        end_row, end_col = end
         score = 0
-        if (player_color == "W" and row == 0) or (player_color == "B" and row == 7):
+        
+        # Promotion check (only valid if move is to promotion rank)
+        if (player_color == "W" and end_row == 0) or (player_color == "B" and end_row == 7):
             score += 10000
-        if piece in ["wp", "bp"]:
-            score += 500
-        score += (6 - row) if player_color == "W" else row
-        if player_color == "W":
-            if row > 0 and board.boardArray[row - 1][col] == "bp":
-                score += 200
-        else:
-            if row < 7 and board.boardArray[row + 1][col] == "wp":
-                score += 200
-        return -score
+        
+        # Capture check using bitboards (valid coordinates only)
+        if 0 <= end_row < 8 and 0 <= end_col < 8:
+            end_bit = 1 << (end_row * 8 + end_col)
+            if (player_color == "W" and (board.black_pawns & end_bit)) or \
+               (player_color == "B" and (board.white_pawns & end_bit)):
+                score += 500
+        
+        # Advancement bonus with valid row check
+        if 0 <= end_row < 8:
+            score += (7 - end_row) if player_color == "W" else end_row
+        
+        # Pawn tension bonus with strict bounds checking
+        if player_color == "W" and end_row > 0:  # Prevent row -1
+            above_row = end_row - 1
+            if 0 <= above_row < 8:
+                above_bit = 1 << (above_row * 8 + end_col)
+                if board.black_pawns & above_bit:
+                    score += 200
+        elif player_color == "B" and end_row < 7:  # Prevent row 8
+            below_row = end_row + 1
+            if 0 <= below_row < 8:
+                below_bit = 1 << (below_row * 8 + end_col)
+                if board.white_pawns & below_bit:
+                    score += 200
+                
+        return -score  # Negative for descending sort
+    
     return sorted(moves, key=move_score)
-
 # ---------------------------
 # PV Search with Aspiration and Transposition Table
 # ---------------------------
@@ -349,7 +411,7 @@ def main():
     running = True
     game_active = False  # Game starts after "Begin"
     clock = pygame.time.Clock()
-    board = ChessBoard()  # Initialize board from board.py
+    board = ChessBoardChessBoard_Bit()  # Initialize board from board.py
 
     while running:
         data = client_socket.recv(1024).decode()

@@ -372,7 +372,7 @@ def main():
         elif data == "Your turn" and game_active:
             print("--------------------------------")
             print("Agent is thinking...")
-            move = iterative_deepening_pvs(board, max_depth=10, player_color=player_color, time_limit=1000)
+            move = iterative_deepening_pvs(board, max_depth=11, player_color=player_color, time_limit=1000)
             move_notation = move_to_notation(move)
             print(f"Agent move ({player_color}): {move_notation}")
             client_socket.send(move_notation.encode())
