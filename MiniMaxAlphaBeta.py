@@ -335,7 +335,8 @@ def minimax(board, depth, alpha, beta, maximizing_player, player_color):
     else:
         min_eval = float('inf')
         for move in moves:
-            new_board = apply_move(board, move, opponent_color)
+
+            new_board = apply_move(board, move, current_color)
             eval_score, _ = minimax(new_board, depth - 1, alpha, beta, True, player_color)
 
             if eval_score < min_eval:
@@ -385,7 +386,7 @@ def iterative_deepening_minimax(board, max_depth, player_color, time_limit=100):
 
             print(f"✅ Depth {depth} Best Move: {move_to_notation(move)} | Eval: {eval_score}")
 
-        # 🏆 If a winning move is found (Checkmate), stop immediately
+        # 🏆 If a Setup Wa2 Wb2 Wc2 Wd2 We2 Wf2 Wg2 Wh2 Ba7 Bb7 Bc7 Bd7 Be7 Bf7 Bg7 Bh7ning move is found (Checkmate), stop immediately
         if eval_score >= CHECKMATE - 1000 or eval_score <= LOSE + 1000:
             print(f"🏆 Checkmate move found at depth {depth}! Stopping search early.")
             break  
