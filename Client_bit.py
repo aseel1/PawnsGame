@@ -7,6 +7,18 @@ from Board_bit import ChessBoardChessBoard_Bit
 CHECKMATE = 100000000000
 LOSE =     -100000000000
 
+# Add at the top of your file
+
+# Maps 1<<i to i (for i in 0..63)
+LSB_INDEX_TABLE = {}
+for i in range(64):
+    LSB_INDEX_TABLE[1 << i] = i
+
+# Maps an index i in [0..63] to (row, col)
+PRECOMPUTED_ROW_COL = [(i // 8, i % 8) for i in range(64)]
+
+
+
 # ---------------------------
 # Transposition Table Setup
 # ---------------------------
@@ -35,9 +47,9 @@ def evaluate_board(board, player_color):
     # Process white pawns using bitboard
     white_pawns = board.white_pawns
     while white_pawns:
-        lsb = white_pawns & -white_pawns
-        pos = lsb.bit_length() - 1
-        row, col = divmod(pos, 8)
+        lsb_val = white_pawns & -white_pawns
+        pos = LSB_INDEX_TABLE[lsb_val]       # Lookup the index
+        row, col = PRECOMPUTED_ROW_COL[pos]  # Then get (row, col)
         pos_tuple = (row, col)
 
         # Original scoring logic
@@ -51,14 +63,14 @@ def evaluate_board(board, player_color):
         if is_en_passant_possible(board, pos_tuple, "W"):
             white_score -= 50
 
-        white_pawns ^= lsb
+        white_pawns ^= lsb_val
 
     # Process black pawns using bitboard
     black_pawns = board.black_pawns
     while black_pawns:
-        lsb = black_pawns & -black_pawns
-        pos = lsb.bit_length() - 1
-        row, col = divmod(pos, 8)
+        lsb_val = black_pawns & -black_pawns
+        pos = LSB_INDEX_TABLE[lsb_val]
+        row, col = PRECOMPUTED_ROW_COL[pos]
         pos_tuple = (row, col)
 
         # Original scoring logic
@@ -72,7 +84,7 @@ def evaluate_board(board, player_color):
         if is_en_passant_possible(board, pos_tuple, "B"):
             black_score -= 50
 
-        black_pawns ^= lsb
+        black_pawns ^= lsb_val
 
     return white_score - black_score if player_color == "W" else black_score - white_score
 
@@ -143,20 +155,18 @@ def is_en_passant_possible(board, pos, player_color):
     return bool(opponent_pawns & adjacent_mask)
 
 def get_all_moves(board, player_color):
-    """Generate all valid pawn moves using bitboard operations"""
-    
+    """Generate all valid pawn moves using bitboard operations with cached lookups."""
     moves = []
     pawns = board.white_pawns if player_color == "W" else board.black_pawns
     opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
     direction = -1 if player_color == "W" else 1
     all_pawns = pawns | opponent_pawns
 
-    # Iterate through all pawns using bitwise operations
     while pawns:
-        lsb = pawns & -pawns
-        pos = lsb.bit_length() - 1
-        pawns ^= lsb
-        row, col = divmod(pos, 8)
+        lsb_val = pawns & -pawns
+        pos = LSB_INDEX_TABLE[lsb_val]      # Cached index lookup
+        row, col = PRECOMPUTED_ROW_COL[pos]   # Cached (row, col) lookup
+        pawns ^= lsb_val
 
         # Single push
         if (row + direction) >= 0 and (row + direction) < 8:
@@ -164,33 +174,30 @@ def get_all_moves(board, player_color):
             if not (all_pawns & (1 << forward)):
                 moves.append(((row, col), (row + direction, col)))
 
-        # Double push
+        # Double push from starting rank
         if (player_color == "W" and row == 6) or (player_color == "B" and row == 1):
             double_forward = pos + (2 * direction * 8)
             if not (all_pawns & (1 << double_forward)) and not (all_pawns & (1 << (pos + direction * 8))):
                 moves.append(((row, col), (row + 2 * direction, col)))
 
-        # Captures
+        # Captures (diagonals)
         for dc in [-1, 1]:
             if 0 <= col + dc < 8:
                 capture_pos = pos + direction * 8 + dc
                 if opponent_pawns & (1 << capture_pos):
                     moves.append(((row, col), (row + direction, col + dc)))
 
-        # En passant
+        # En passant capture
         if board.en_passant_target:
+            # There is only one en passant target; its calculation is minor
             ep_pos = board.en_passant_target.bit_length() - 1
             ep_row, ep_col = divmod(ep_pos, 8)
             if (player_color == "W" and row == 3 and ep_row == 2) or \
-            (player_color == "B" and row == 4 and ep_row == 5):
+               (player_color == "B" and row == 4 and ep_row == 5):
                 if abs(col - ep_col) == 1:
-                    # Check adjacent opponent pawn
-                    adjacent_col = ep_col
-                    adjacent_bit = 1 << (row * 8 + adjacent_col)
-                    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
-                    if opponent_pawns & adjacent_bit:
-                        moves.append(((row, col), (ep_row, ep_col)))
+                    moves.append(((row, col), (ep_row, ep_col)))
     return moves
+
 def apply_move(board, move, player_color):
     new_board = ChessBoardChessBoard_Bit()
     new_board.white_pawns = board.white_pawns
@@ -242,6 +249,7 @@ def order_moves(board, moves, player_color):
         return -score  # Negative for descending sort
     
     return sorted(moves, key=move_score)
+
 # ---------------------------
 # PV Search with Aspiration and Transposition Table
 # ---------------------------
