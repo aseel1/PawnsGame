@@ -1,7 +1,7 @@
 class ChessBoardChessBoard_Bit:
     def __init__(self):
-        self.white_pawns = 0x0000000000FF0000  # Initial position: row 6 (0x00FF000000000000 -> 0x0000000000FF0000)
-        self.black_pawns = 0x0000FF0000000000  # Initial position: row 1
+        self.white_pawns = 0x00FF000000000000  # Corrected to row 6
+        self.black_pawns = 0x000000000000FF00  # Corrected to row 1
         self.en_passant_target = None
         self.last_move = None
 
@@ -114,28 +114,43 @@ class ChessBoardChessBoard_Bit:
         return False
 
     def has_moves(self, player_color):
-        pawns = self.white_pawns if player_color == 'W' else self.black_pawns
-        direction = -1 if player_color == 'W' else 1
-        
+        pawns = self.white_pawns if player_color == "W" else self.black_pawns
+        direction = -1 if player_color == "W" else 1
+        all_pawns = self.white_pawns | self.black_pawns
+
         while pawns:
             lsb = pawns & -pawns
             pos = (lsb.bit_length() - 1)
             pawns ^= lsb
             row, col = divmod(pos, 8)
 
-            # Check forward move
-            if self._can_move_forward(row, col, direction):
+            # Check single forward move
+            forward_pos = pos + direction * 8
+            if 0 <= row + direction < 8 and not (all_pawns & (1 << forward_pos)):
                 return True
 
             # Check captures
-            if self._can_capture(row, col, direction, player_color):
-                return True
+            for dc in [-1, 1]:
+                if 0 <= col + dc < 8:
+                    capture_pos = pos + direction * 8 + dc
+                    opponent_pawns = self.black_pawns if player_color == "W" else self.white_pawns
+                    if opponent_pawns & (1 << capture_pos):
+                        return True
 
-            # Check en passant
-            if self._can_en_passant(row, col, direction, player_color):
-                return True
+            # Check en passant (ADDED: Adjacent opponent pawn check)
+            if self.en_passant_target:
+                ep_row, ep_col = divmod(self.en_passant_target.bit_length() - 1, 8)
+                # Validate alignment and adjacent pawn
+                if (player_color == "W" and row == 3 and ep_row == 2 and abs(col - ep_col) == 1) or \
+                (player_color == "B" and row == 4 and ep_row == 5 and abs(col - ep_col) == 1):
+                    # Check adjacent column for opponent pawn
+                    adjacent_col = ep_col
+                    adjacent_bit = 1 << (row * 8 + adjacent_col)
+                    opponent_pawns = self.black_pawns if player_color == "W" else self.white_pawns
+                    if opponent_pawns & adjacent_bit:
+                        return True
 
-        return False
+        return False  # No moves available
 
     def is_game_over(self, player_color):
         opponent_color = 'B' if player_color == 'W' else 'W'
@@ -158,32 +173,34 @@ class ChessBoardChessBoard_Bit:
         return None
 
     def is_game_over_2(self, player_color):
-        # Check promotion
-        if player_color == 'W' and (self.white_pawns & 0xFF) != 0:
-            return 'W'
-        if player_color == 'B' and (self.black_pawns & 0xFF00000000000000) != 0:
-            return 'B'
+        # Promotion check
+        promotion_mask = 0xFF if player_color == "W" else 0xFF00000000000000
+        if player_color == "W" and (self.white_pawns & promotion_mask):
+            return "W"
+        if player_color == "B" and (self.black_pawns & promotion_mask):
+            return "B"
 
-        # Check elimination
-        if (player_color == 'W' and self.white_pawns == 0) or \
-           (player_color == 'B' and self.black_pawns == 0):
-            return 'B' if player_color == 'W' else 'W'
+        # Elimination check
+        if (player_color == "W" and self.white_pawns == 0) or \
+        (player_color == "B" and self.black_pawns == 0):
+            return "B" if player_color == "W" else "W"
 
-        # Check own moves
+        # Mobility check
         if not self.has_moves(player_color):
-            return 'B' if player_color == 'W' else 'W'
+            return "B" if player_color == "W" else "W"
 
         return None
 
     def print_board(self):
         print("   a b c d e f g h")
-        for row in range(7, -1, -1):
+        for row in range(8):
             print(f"{row+1} ", end="")
             for col in range(8):
-                pos = 1 << (row * 8 + col)
-                if self.white_pawns & pos:
+                bit_index = row * 8 + col
+                bit_mask = 1 << bit_index
+                if self.white_pawns & bit_mask:
                     print("wp", end=" ")
-                elif self.black_pawns & pos:
+                elif self.black_pawns & bit_mask:
                     print("bp", end=" ")
                 else:
                     print("--", end=" ")

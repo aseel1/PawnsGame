@@ -175,6 +175,8 @@ def start_server():
                     print(f"{'Server' if winner == server_color else 'Client'} wins!")
                     clients[0].send("exit".encode())
                     break
+                Board.print_board()
+
                         
             else:
                 # Client's turn
@@ -210,6 +212,10 @@ def start_server():
                     print(f"{'Client' if winner == client_color else 'Server'} wins!")
                     clients[0].send("exit".encode())
                     break
+                
+                
+                Board.print_board()
+
 
 
 

@@ -28,166 +28,100 @@ def board_hash(board):
 # Evaluation & Utility Functions (Bitboard Version)
 # ---------------------------
 def evaluate_board(board, player_color):
-    """Evaluate board state using bitboard features"""
+    """Bitboard version maintaining original evaluation structure"""
     white_score = 0
     black_score = 0
-    
-    # Material count (base value)
-    white_material = bin(board.white_pawns).count('1') * 100
-    black_material = bin(board.black_pawns).count('1') * 100
-    white_score += white_material
-    black_score += black_material
 
-    # Process white pawn features
+    # Process white pawns using bitboard
     white_pawns = board.white_pawns
     while white_pawns:
         lsb = white_pawns & -white_pawns
         pos = lsb.bit_length() - 1
         row, col = divmod(pos, 8)
-        
-        # Only process valid positions
-        if not (0 <= row < 8 and 0 <= col < 8):
-            white_pawns ^= lsb
-            continue
+        pos_tuple = (row, col)
 
-        # Advancement bonus (closer to promotion)
-        white_score += (7 - row) * 2  # Max 12 points for 7th rank
-        
-        # Blocked penalty (fixed syntax)
-        if row > 0:  # Prevent checking row -1
-            forward_pos = pos - 8
-            if 0 <= forward_pos < 64:
-                # Corrected bitwise operation with proper parentheses
-                if (1 << forward_pos) & (board.white_pawns | board.black_pawns):
-                    white_score -= 30
-        
-        # Passed pawn check
-        file_mask = 0x0101010101010101 << col
-        ahead_mask = ~((1 << (pos + 8)) - 1)
-        if not (board.black_pawns & file_mask & ahead_mask):
-            white_score += 50
-            
-        # Hanging pawn check
-        hanging = False
-        for dc in [-1, 1]:
-            attack_col = col + dc
-            if 0 <= attack_col < 8:
-                attack_pos = pos - 8 + dc
-                if 0 <= attack_pos < 64:
-                    if board.black_pawns & (1 << attack_pos):
-                        white_score -= 50
-                        hanging = True
-                        break
-            
-        # En passant vulnerability
-        if not hanging and board.en_passant_target:
-            ep_pos = board.en_passant_target.bit_length() - 1
-            if row == 3 and abs(col - (ep_pos % 8)) == 1:
-                white_score -= 30
+        # Original scoring logic
+        white_score += 10 + (6 - row) * 2
+        if is_passed_pawn(pos_tuple, board, "W"):
+            white_score += 25
+        if is_pawn_blocked(pos_tuple, board, "W"):
+            white_score -= 5
+        if is_hanging_pawn(board, pos_tuple, "W"):
+            white_score -= 30
+        if is_en_passant_possible(board, pos_tuple, "W"):
+            white_score -= 50
 
         white_pawns ^= lsb
 
-    # Process black pawn features (similar fixes applied)
+    # Process black pawns using bitboard
     black_pawns = board.black_pawns
     while black_pawns:
         lsb = black_pawns & -black_pawns
         pos = lsb.bit_length() - 1
         row, col = divmod(pos, 8)
-        
-        if not (0 <= row < 8 and 0 <= col < 8):
-            black_pawns ^= lsb
-            continue
+        pos_tuple = (row, col)
 
-        black_score += row * 2
-        
-        if row < 7:
-            forward_pos = pos + 8
-            if 0 <= forward_pos < 64:
-                if (1 << forward_pos) & (board.white_pawns | board.black_pawns):
-                    black_score -= 30
-        
-        file_mask = 0x0101010101010101 << col
-        ahead_mask = (1 << pos) - 1
-        if not (board.white_pawns & file_mask & ahead_mask):
-            black_score += 50
-            
-        hanging = False
-        for dc in [-1, 1]:
-            attack_col = col + dc
-            if 0 <= attack_col < 8:
-                attack_pos = pos + 8 + dc
-                if 0 <= attack_pos < 64:
-                    if board.white_pawns & (1 << attack_pos):
-                        black_score -= 50
-                        hanging = True
-                        break
-            
-        if not hanging and board.en_passant_target:
-            ep_pos = board.en_passant_target.bit_length() - 1
-            if row == 4 and abs(col - (ep_pos % 8)) == 1:
-                black_score -= 30
+        # Original scoring logic
+        black_score += 10 + (row - 1) * 2
+        if is_passed_pawn(pos_tuple, board, "B"):
+            black_score += 25
+        if is_pawn_blocked(pos_tuple, board, "B"):
+            black_score -= 5
+        if is_hanging_pawn(board, pos_tuple, "B"):
+            black_score -= 30
+        if is_en_passant_possible(board, pos_tuple, "B"):
+            black_score -= 50
 
         black_pawns ^= lsb
 
-    final_score = white_score - black_score
-    return final_score if player_color == "W" else -final_score
+    return white_score - black_score if player_color == "W" else black_score - white_score
 
-
-def passed_pawns_score(pawns, opponent_pawns, color):
-    """Calculate passed pawns score using bitwise operations"""
-    score = 0
-    mask = pawns
-    while mask:
-        lsb = mask & -mask
-        pos = lsb.bit_length() - 1
-        col = pos % 8
-        row = pos // 8
-        
-        # Check if pawn is passed
-        file_mask = 0x0101010101010101 << col
-        ahead_mask = (0xFFFFFFFFFFFFFFFF << (pos + 8)) if color == "W" else (0xFFFFFFFFFFFFFFFF >> (64 - pos))
-        if not (opponent_pawns & file_mask & ahead_mask):
-            score += 50
-            
-        mask ^= lsb
-    return score
-
-# Remove or update these legacy functions that use boardArray
 def is_hanging_pawn(board, pos, player_color):
-    """Check if a pawn is unprotected using bitboards"""
+    """Bitboard version of hanging pawn check"""
     row, col = pos
-    pos_bit = 1 << (row * 8 + col)
     opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
-    direction = 1 if player_color == "W" else -1
+    direction = 1 if player_color == "W" else -1  # Attack direction
     
-    # Check diagonal attacks
+    # Calculate attack positions using bitwise operations
+    attack_mask = 0
     for dc in [-1, 1]:
-        attack_row = row + direction
-        attack_col = col + dc
-        if 0 <= attack_col < 8:
-            attack_bit = 1 << (attack_row * 8 + attack_col)
-            if opponent_pawns & attack_bit:
-                return True
-    return False
+        if 0 <= col + dc < 8:
+            attack_pos = (row + direction) * 8 + (col + dc)
+            attack_mask |= 1 << attack_pos
+            
+    return bool(opponent_pawns & attack_mask)
 
 def is_passed_pawn(pos, board, player_color):
-    """Check passed pawn using bitboard operations"""
+    """Bitboard version of passed pawn check"""
     row, col = pos
     opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+    
+    # Create file masks
     file_mask = 0x0101010101010101 << col
-    ahead_mask = ~((1 << (row * 8)) - 1) if player_color == "W" else ((1 << (row * 8)) - 1)
-    return not (opponent_pawns & file_mask & ahead_mask)
+    adjacent_files = (file_mask << 1) | (file_mask >> 1)
+    full_mask = file_mask | adjacent_files
+    
+    # Create ahead mask
+    if player_color == "W":
+        ahead_mask = ~((1 << ((row + 1) * 8)) - 1)
+    else:
+        ahead_mask = (1 << (row * 8)) - 1
+        
+    return not (opponent_pawns & full_mask & ahead_mask)
 
 def is_pawn_blocked(pos, board, player_color):
-    """Check blocked pawn using bitboards"""
+    """Bitboard version of blocked pawn check"""
     row, col = pos
     direction = -1 if player_color == "W" else 1
-    forward_bit = 1 << ((row + direction) * 8 + col)
-    all_pawns = board.white_pawns | board.black_pawns
-    return bool(all_pawns & forward_bit)
+    forward_row = row + direction
+    
+    if 0 <= forward_row < 8:
+        forward_bit = 1 << (forward_row * 8 + col)
+        return bool((board.white_pawns | board.black_pawns) & forward_bit)
+    return False  # Edge of board
 
 def is_en_passant_possible(board, pos, player_color):
-    """Check en passant using bitboard data"""
+    """Bitboard version of en passant check"""
     if not board.en_passant_target:
         return False
     
@@ -195,14 +129,22 @@ def is_en_passant_possible(board, pos, player_color):
     ep_pos = board.en_passant_target.bit_length() - 1
     ep_row, ep_col = divmod(ep_pos, 8)
     
+    # Check position alignment
     if player_color == "W":
-        return row == 3 and ep_row == 2 and abs(col - ep_col) == 1
+        if row != 3 or ep_row != 2 or col != ep_col:
+            return False
     else:
-        return row == 4 and ep_row == 5 and abs(col - ep_col) == 1
-
+        if row != 4 or ep_row != 5 or col != ep_col:
+            return False
+    
+    # Check adjacent pawns using bitboard
+    adjacent_mask = (1 << (row * 8 + col - 1)) | (1 << (row * 8 + col + 1))
+    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+    return bool(opponent_pawns & adjacent_mask)
 
 def get_all_moves(board, player_color):
     """Generate all valid pawn moves using bitboard operations"""
+    
     moves = []
     pawns = board.white_pawns if player_color == "W" else board.black_pawns
     opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
@@ -240,10 +182,14 @@ def get_all_moves(board, player_color):
             ep_pos = board.en_passant_target.bit_length() - 1
             ep_row, ep_col = divmod(ep_pos, 8)
             if (player_color == "W" and row == 3 and ep_row == 2) or \
-               (player_color == "B" and row == 4 and ep_row == 5):
+            (player_color == "B" and row == 4 and ep_row == 5):
                 if abs(col - ep_col) == 1:
-                    moves.append(((row, col), (ep_row, ep_col)))
-
+                    # Check adjacent opponent pawn
+                    adjacent_col = ep_col
+                    adjacent_bit = 1 << (row * 8 + adjacent_col)
+                    opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+                    if opponent_pawns & adjacent_bit:
+                        moves.append(((row, col), (ep_row, ep_col)))
     return moves
 def apply_move(board, move, player_color):
     new_board = ChessBoardChessBoard_Bit()
@@ -324,6 +270,7 @@ def pvs(board, depth, alpha, beta, maximizing_player, root_color):
         else:
             value = LOSE
         transposition_table[key] = (value, None)
+        
         return value, None
 
     if depth == 0:
@@ -344,8 +291,8 @@ def pvs(board, depth, alpha, beta, maximizing_player, root_color):
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
-                if max_eval >= CHECKMATE - 1:  # Exact mate detection
-                    break
+                # if max_eval >= CHECKMATE - 1:  # Exact mate detection
+                #     break
             
             alpha = max(alpha, eval_score)
             if beta <= alpha:
@@ -361,8 +308,8 @@ def pvs(board, depth, alpha, beta, maximizing_player, root_color):
             if eval_score < min_eval:
                 min_eval = eval_score
                 best_move = move
-                if min_eval <= LOSE + 1:  # Exact mate detection
-                    break
+                # if min_eval <= LOSE + 1:  # Exact mate detection
+                #     break
             
             beta = min(beta, eval_score)
             if beta <= alpha:
@@ -380,7 +327,7 @@ def iterative_deepening_pvs(board, max_depth, player_color, time_limit=100):
         elapsed = time.time() - start_time
         if elapsed >= time_limit:
             break
-            
+      
         # Identical parameters to Minimax
         eval_score, move = pvs(board, depth, -CHECKMATE, CHECKMATE, True, player_color)
         
@@ -389,15 +336,15 @@ def iterative_deepening_pvs(board, max_depth, player_color, time_limit=100):
             print(f"Depth {depth} Best Move: {move_to_notation(move)} | Eval: {eval_score}")
             
             # Exact Minimax stopping condition
-            if eval_score >= CHECKMATE - 1 or eval_score <= LOSE + 1:
-                print(f"🏆 Checkmate detected at depth {depth}")
+        if eval_score >= CHECKMATE - 1000 or eval_score <= LOSE + 1000:
+                print(f"🏆 Checkmate move found at depth {depth}! Stopping search early.")
                 break
 
-    # Fallback identical to Minimax
-    if best_move is None:
-        moves = get_all_moves(board, player_color)
-        if moves:
-            best_move = moves[0]
+    # # Fallback identical to Minimax
+    # if best_move is None:
+    #     moves = get_all_moves(board, player_color)
+    #     if moves:
+    #         best_move = moves[0]
     
     print("Search completed!")
     return best_move
