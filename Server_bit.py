@@ -204,8 +204,10 @@ def start_server():
                 # Apply the client's move on the server's GUI
                 start_col, start_row = ord(move[0]) - 97, 8 - int(move[1])
                 end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
-                Board.move_pawn((start_row, start_col), (end_row, end_col), client_color)
-                
+                # Board.move_pawn((start_row, start_col), (end_row, end_col), client_color)
+                # Apply the opponent's move permanently using the new make_move system.
+                Board.make_move((start_row, start_col), (end_row, end_col), client_color)
+
                 # 🔥 Check if the client wins
                 winner = Board.is_game_over(client_color)
                 if winner:
@@ -243,7 +245,10 @@ def start_server():
             # Apply the move to the GUI
             start_col, start_row = ord(move[0]) - 97, 8 - int(move[1])
             end_col, end_row = ord(move[2]) - 97, 8 - int(move[3])
-            Board.move_pawn((start_row, start_col), (end_row, end_col), current_player_color)
+            # Board.move_pawn((start_row, start_col), (end_row, end_col), current_player_color)
+            
+            # Apply the opponent's move permanently using the new make_move system.
+            Board.make_move((start_row, start_col), (end_row, end_col), current_player_color)
 
 
             current_time2 = pygame.time.get_ticks() / 1000

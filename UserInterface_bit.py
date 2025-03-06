@@ -86,13 +86,10 @@ class UserInterface:
 
                     if self.selected_square:
                         start_row, start_col = self.selected_square
-                        # Convert to bitboard coordinates
-                        success = self.chessboard.move_pawn(
-                            (start_row, start_col),
-                            (row, col),
-                            self.playerColor
-                        )
-                        if success:
+                        # Use the new make_move method instead of move_pawn
+                        stored_info = self.chessboard.make_move((start_row, start_col), (row, col), self.playerColor)
+                        # In the UI we assume that if make_move returns stored_info, the move was applied.
+                        if stored_info is not None:
                             move = (start_row, start_col, row, col)
                             waiting_for_move = False
                         else:
@@ -103,11 +100,10 @@ class UserInterface:
                         if (self.playerColor == "W" and (self.chessboard.white_pawns & bit_position)) or \
                         (self.playerColor == "B" and (self.chessboard.black_pawns & bit_position)):
                             self.selected_square = (row, col)
-                
+
             self.drawComponent()
 
         return move, flag
-
 
 
 
