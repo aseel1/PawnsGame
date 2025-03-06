@@ -68,10 +68,11 @@ class UserInterface:
                     SQUARE_SIZE//3)
                 
     def clientMove(self):
-        """Handle user moves using bitboard checks."""
+        """Handle user moves using bitboard checks with validation."""
         move = None
         flag = 0
         waiting_for_move = True
+        valid_moves = []  # Store valid moves for selected pawn
 
         while waiting_for_move:
             for event in pygame.event.get():
@@ -85,28 +86,48 @@ class UserInterface:
                     bit_position = 1 << (row * 8 + col)
 
                     if self.selected_square:
-                        start_row, start_col = self.selected_square
-                        # Use the new make_move method instead of move_pawn
-                        stored_info = self.chessboard.make_move((start_row, start_col), (row, col), self.playerColor)
-                        # In the UI we assume that if make_move returns stored_info, the move was applied.
-                        if stored_info is not None:
-                            move = (start_row, start_col, row, col)
-                            waiting_for_move = False
+                        # Check if destination is valid
+                        start_pos = (self.selected_square[0], self.selected_square[1])
+                        end_pos = (row, col)
+                        
+                        if end_pos in valid_moves:
+                            stored_info = self.chessboard.make_move(start_pos, end_pos, self.playerColor)
+                            if stored_info is not None:
+                                move = (*start_pos, *end_pos)
+                                waiting_for_move = False
                         else:
                             print("Invalid move")
                         self.selected_square = None
+                        valid_moves = []
                     else:
-                        # Check if clicked square contains player's pawn using bitboard
+                        # Check if clicked square contains player's pawn and get valid moves
                         if (self.playerColor == "W" and (self.chessboard.white_pawns & bit_position)) or \
                         (self.playerColor == "B" and (self.chessboard.black_pawns & bit_position)):
                             self.selected_square = (row, col)
+                            # Generate valid moves for selected pawn
+                            valid_moves = [
+                                (move[1][0], move[1][1])  # Extract destination positions
+                                for move in self.chessboard.get_all_moves(self.playerColor)
+                                if (move[0][0], move[0][1]) == (row, col)
+                            ]
 
             self.drawComponent()
+            if self.selected_square:
+                self.draw_highlight(valid_moves)
 
         return move, flag
 
-
-
+    def draw_highlight(self, valid_moves):
+        """Highlight valid move destinations."""
+        for (row, col) in valid_moves:
+            rect = pygame.Rect(
+                col * SQUARE_SIZE + 2,
+                row * SQUARE_SIZE + 2,
+                SQUARE_SIZE - 4,
+                SQUARE_SIZE - 4
+            )
+            pygame.draw.rect(self.surface, HIGHLIGHT_COLOR, rect, 4)
+        pygame.display.update()
 
 
 

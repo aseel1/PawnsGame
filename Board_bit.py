@@ -1,5 +1,9 @@
 import random
 random.seed(42)  # For reproducibility; remove in production
+LSB_INDEX_TABLE = {}
+for i in range(64):
+    LSB_INDEX_TABLE[1 << i] = i
+PRECOMPUTED_ROW_COL = [(i // 8, i % 8) for i in range(64)]
 
 # Zobrist keys
 zobrist_white = [random.getrandbits(64) for _ in range(64)]
@@ -240,3 +244,39 @@ class ChessBoardChessBoard_Bit:
                     print("--", end=" ")
             print(f"{row+1}")
         print("   a b c d e f g h")
+
+
+
+
+
+    def get_all_moves(board, player_color):
+        moves = []
+        pawns = board.white_pawns if player_color == "W" else board.black_pawns
+        opponent_pawns = board.black_pawns if player_color == "W" else board.white_pawns
+        direction = -1 if player_color == "W" else 1
+        all_pawns = pawns | opponent_pawns
+        while pawns:
+            lsb_val = pawns & -pawns
+            pos = LSB_INDEX_TABLE[lsb_val]
+            row, col = PRECOMPUTED_ROW_COL[pos]
+            pawns ^= lsb_val
+            if (row + direction) >= 0 and (row + direction) < 8:
+                forward = pos + (direction * 8)
+                if not (all_pawns & (1 << forward)):
+                    moves.append(((row, col), (row + direction, col)))
+            if (player_color == "W" and row == 6) or (player_color == "B" and row == 1):
+                double_forward = pos + (2 * direction * 8)
+                if not (all_pawns & (1 << double_forward)) and not (all_pawns & (1 << (pos + direction * 8))):
+                    moves.append(((row, col), (row + 2 * direction, col)))
+            for dc in [-1, 1]:
+                if 0 <= col + dc < 8:
+                    capture_pos = pos + direction * 8 + dc
+                    if opponent_pawns & (1 << capture_pos):
+                        moves.append(((row, col), (row + direction, col + dc)))
+            if board.en_passant_target:
+                ep_pos = board.en_passant_target.bit_length() - 1
+                ep_row, ep_col = divmod(ep_pos, 8)
+                if (player_color == "W" and row == 3 and ep_row == 2) or (player_color == "B" and row == 4 and ep_row == 5):
+                    if abs(col - ep_col) == 1:
+                        moves.append(((row, col), (ep_row, ep_col)))
+        return moves
