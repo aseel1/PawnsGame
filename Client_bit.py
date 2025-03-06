@@ -2,13 +2,16 @@ import random
 import socket
 import pygame
 import time
-from Board_bit import ChessBoardChessBoard_Bit
+from Board_bit import ChessBoardChessBoard_Bit, zobrist_white, zobrist_black, zobrist_en_passant, zobrist_current_player
 
 CHECKMATE = 100000000000
 LOSE =     -100000000000
 
 # Add at the top of your file
+# Zobrist Tables
 
+# ---------------------------
+# Bitwise Operations
 # Maps 1<<i to i (for i in 0..63)
 LSB_INDEX_TABLE = {}
 for i in range(64):
@@ -23,18 +26,12 @@ PRECOMPUTED_ROW_COL = [(i // 8, i % 8) for i in range(64)]
 # Transposition Table Setup
 # ---------------------------
 transposition_table = {}
+HASH_EXACT, HASH_ALPHA, HASH_BETA = 0, 1, 2
+TRANSPOSITION_TABLE = {}
 
 # ---------------------------
 # Transposition Table Setup (Bitboard Version)
 # ---------------------------
-def board_hash(board):
-    """Create hash for bitboard-based chess board"""
-    return (
-        board.white_pawns, 
-        board.black_pawns,
-        board.en_passant_target,
-        board.last_move
-    )
 
 # ---------------------------
 # Evaluation & Utility Functions (Bitboard Version)
@@ -199,11 +196,9 @@ def get_all_moves(board, player_color):
     return moves
 
 def apply_move(board, move, player_color):
-    new_board = ChessBoardChessBoard_Bit()
-    new_board.white_pawns = board.white_pawns
-    new_board.black_pawns = board.black_pawns
-    start, end = move
-    new_board.move_pawn(start, end, player_color)
+    """Create new board with updated hash"""
+    new_board = board.copy()
+    new_board.move_pawn(move[0], move[1], player_color)
     return new_board
 
 def move_to_notation(move):
@@ -250,81 +245,112 @@ def order_moves(board, moves, player_color):
     
     return sorted(moves, key=move_score)
 
-# ---------------------------
-# PV Search with Aspiration and Transposition Table
-# ---------------------------
-# ---------------------------
-# PV Search with Transposition Table
-# ---------------------------
-# ---------------------------
-# PV Search with Transposition Table (Minimax-Compatible Version)
-# ---------------------------
-# ---------------------------
+
 # PV Search (Minimax-AlphaBeta Clone)
 # ---------------------------
 def pvs(board, depth, alpha, beta, maximizing_player, root_color):
     global transposition_table
-    key = (board_hash(board), depth, maximizing_player)
-    if key in transposition_table:
-        return transposition_table[key]
+    # --- Transposition Table Lookup ---
+    entry = TRANSPOSITION_TABLE.get(board.zobrist_hash)
+    if entry and entry["depth"] >= depth:
+        if entry["flag"] == HASH_EXACT:
+            return entry["score"], entry["best_move"]
+        elif entry["flag"] == HASH_ALPHA and entry["score"] <= alpha:
+            return alpha, entry["best_move"]
+        elif entry["flag"] == HASH_BETA and entry["score"] >= beta:
+            return beta, entry["best_move"]
 
-    current_color = root_color if maximizing_player else ("B" if root_color == "W" else "W")
-    
-    # Terminal state check (identical to Minimax)
-    game_result = board.is_game_over_2(current_color)
+    # Terminal state check
+    game_result = board.is_game_over_2(board.current_player)
     if game_result is not None:
-        if game_result == root_color:
-            value = CHECKMATE
-        else:
-            value = LOSE
-        transposition_table[key] = (value, None)
-        
-        return value, None
+        score = CHECKMATE if game_result == root_color else LOSE
+        TRANSPOSITION_TABLE[board.zobrist_hash] = {
+            "depth": depth,
+            "score": score,
+            "flag": HASH_EXACT,
+            "best_move": None
+        }
+        return score, None
 
     if depth == 0:
-        value = evaluate_board(board, root_color)
-        transposition_table[key] = (value, None)
-        return value, None
+        score = evaluate_board(board, root_color)
+        TRANSPOSITION_TABLE[board.zobrist_hash] = {
+            "depth": 0,
+            "score": score,
+            "flag": HASH_EXACT,
+            "best_move": None
+        }
+        return score, None
 
-    best_move = None
-    moves = get_all_moves(board, current_color)
-    moves = order_moves(board, moves, current_color)
+    moves = get_all_moves(board, board.current_player)
+    moves = order_moves(board, moves, board.current_player)
+    original_alpha = alpha
+    best_move = moves[0] if moves else None  # Critical fix!
 
     if maximizing_player:
         max_eval = -CHECKMATE
+        best_move = None  # Initialize best_move here
         for move in moves:
-            new_board = apply_move(board, move, current_color)
+            new_board = apply_move(board, move, board.current_player)
             eval_score, _ = pvs(new_board, depth-1, alpha, beta, False, root_color)
             
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
-                # if max_eval >= CHECKMATE - 1:  # Exact mate detection
-                #     break
-            
-            alpha = max(alpha, eval_score)
-            if beta <= alpha:
+                if max_eval >= beta:
+                    break  # Beta cutoff
+                    
+            alpha = max(alpha, max_eval)
+            if alpha >= beta:
                 break
-        transposition_table[key] = (max_eval, best_move)
+
+        # Store in transposition table
+        flag = HASH_EXACT
+        if max_eval <= original_alpha:
+            flag = HASH_ALPHA
+        elif max_eval >= beta:
+            flag = HASH_BETA
+            
+        TRANSPOSITION_TABLE[board.zobrist_hash] = {
+            "depth": depth,
+            "score": max_eval,
+            "flag": flag,
+            "best_move": best_move
+        }
         return max_eval, best_move
-    else:
+        
+    else:  # Minimizing player
         min_eval = CHECKMATE
+        best_move = None  # Initialize best_move here
         for move in moves:
-            new_board = apply_move(board, move, current_color)
+            new_board = apply_move(board, move, board.current_player)
             eval_score, _ = pvs(new_board, depth-1, alpha, beta, True, root_color)
             
             if eval_score < min_eval:
                 min_eval = eval_score
                 best_move = move
-                # if min_eval <= LOSE + 1:  # Exact mate detection
-                #     break
-            
-            beta = min(beta, eval_score)
+                if min_eval <= alpha:
+                    break  # Alpha cutoff
+                    
+            beta = min(beta, min_eval)
             if beta <= alpha:
                 break
-        transposition_table[key] = (min_eval, best_move)
-        return min_eval, best_move
 
+        # Store in transposition table
+        flag = HASH_EXACT
+        if min_eval <= original_alpha:
+            flag = HASH_ALPHA
+        elif min_eval >= beta:
+            flag = HASH_BETA
+            
+        TRANSPOSITION_TABLE[board.zobrist_hash] = {
+            "depth": depth,
+            "score": min_eval,
+            "flag": flag,
+            "best_move": best_move
+        }
+        return min_eval, best_move
+ 
 def iterative_deepening_pvs(board, max_depth, player_color, time_limit=100):
     global transposition_table
     transposition_table.clear()
@@ -348,11 +374,11 @@ def iterative_deepening_pvs(board, max_depth, player_color, time_limit=100):
                 print(f"🏆 Checkmate move found at depth {depth}! Stopping search early.")
                 break
 
-    # # Fallback identical to Minimax
-    # if best_move is None:
-    #     moves = get_all_moves(board, player_color)
-    #     if moves:
-    #         best_move = moves[0]
+    if best_move is None:
+        print("No moves found. Randomly selecting fallback move.")
+        fallback_moves = get_all_moves(board, player_color)
+        if fallback_moves:
+            best_move = random.choice(fallback_moves)
     
     print("Search completed!")
     return best_move

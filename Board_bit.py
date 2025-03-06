@@ -1,10 +1,58 @@
+import random
+random.seed(42)  # For reproducibility; remove in production
+zobrist_white = [random.getrandbits(64) for _ in range(64)]
+zobrist_black = [random.getrandbits(64) for _ in range(64)]
+zobrist_en_passant = [random.getrandbits(64) for _ in range(64)]
+zobrist_current_player = [random.getrandbits(64), random.getrandbits(64)]
+
 class ChessBoardChessBoard_Bit:
     def __init__(self):
-        self.white_pawns = 0x00FF000000000000  # Corrected to row 6
-        self.black_pawns = 0x000000000000FF00  # Corrected to row 1
+        
+        self.white_pawns = 0x00FF000000000000
+        self.black_pawns = 0x000000000000FF00
         self.en_passant_target = None
         self.last_move = None
+        self.current_player = 'W'  # Track whose turn it is
+        self.zobrist_hash = 0  # Initialize hash
+        # Initialize hash for starting position
+        self._initialize_zobrist_hash()
+        
+        
+    def _initialize_zobrist_hash(self):
+        """Calculate initial hash for starting position"""
+        self.zobrist_hash = 0
+        
+        # White pawns
+        mask = self.white_pawns
+        while mask:
+            lsb = mask & -mask
+            pos = (lsb.bit_length() - 1)
+            self.zobrist_hash ^= zobrist_white[pos]
+            mask ^= lsb
+            
+        # Black pawns
+        mask = self.black_pawns
+        while mask:
+            lsb = mask & -mask
+            pos = (lsb.bit_length() - 1)
+            self.zobrist_hash ^= zobrist_black[pos]
+            mask ^= lsb
+            
+        # Current player
+        self.zobrist_hash ^= zobrist_current_player[0]  # 'W' starts
 
+    def copy(self):
+        """Create deep copy with hash"""
+        new_board = ChessBoardChessBoard_Bit()
+        new_board.white_pawns = self.white_pawns
+        new_board.black_pawns = self.black_pawns
+        new_board.en_passant_target = self.en_passant_target
+        new_board.last_move = self.last_move
+        new_board.current_player = self.current_player
+        new_board.zobrist_hash = self.zobrist_hash  # Direct copy
+        return new_board
+
+    
     def initialize_custom_board(self, setup_message):
         self.white_pawns = 0
         self.black_pawns = 0
@@ -26,60 +74,68 @@ class ChessBoardChessBoard_Bit:
         end_row, end_col = end_pos
         start_bit = 1 << (start_row * 8 + start_col)
         end_bit = 1 << (end_row * 8 + end_col)
-        
-        # Validate player's pawn exists at start position
-        if player_color == 'W' and not (self.white_pawns & start_bit):
-            return False
-        if player_color == 'B' and not (self.black_pawns & start_bit):
-            return False
 
-        # Create temp board for simulation
-        temp = ChessBoardChessBoard_Bit()
-        temp.white_pawns = self.white_pawns
-        temp.black_pawns = self.black_pawns
-        temp.en_passant_target = self.en_passant_target
-
-        # Clear start position
+        # Remove pawn from start position (both hash and bitboard)
         if player_color == 'W':
-            temp.white_pawns ^= start_bit
+            self.white_pawns ^= start_bit  # Toggle start bit
+            self.zobrist_hash ^= zobrist_white[start_bit.bit_length()-1]
         else:
-            temp.black_pawns ^= start_bit
+            self.black_pawns ^= start_bit  # Toggle start bit
+            self.zobrist_hash ^= zobrist_black[start_bit.bit_length()-1]
 
         # Handle captures
-        if abs(start_col - end_col) == 1:
+        if abs(start_col - end_col) == 1:  # Capture move
             # Regular capture
-            if player_color == 'W' and (temp.black_pawns & end_bit):
-                temp.black_pawns ^= end_bit
-            elif player_color == 'B' and (temp.white_pawns & end_bit):
-                temp.white_pawns ^= end_bit
+            if player_color == 'W' and (self.black_pawns & end_bit):
+                self.black_pawns ^= end_bit  # Remove captured pawn
+                self.zobrist_hash ^= zobrist_black[end_bit.bit_length()-1]
+            elif player_color == 'B' and (self.white_pawns & end_bit):
+                self.white_pawns ^= end_bit  # Remove captured pawn
+                self.zobrist_hash ^= zobrist_white[end_bit.bit_length()-1]
             # En passant capture
             elif self.en_passant_target and end_bit == self.en_passant_target:
-                captured_row = start_row  # For en passant, capture is on same row
-                captured_bit = 1 << (captured_row * 8 + end_col)
+                ep_row = 3 if player_color == 'W' else 4
+                ep_pos = (ep_row * 8 + end_col)
+                ep_bit = 1 << ep_pos
                 if player_color == 'W':
-                    temp.black_pawns ^= captured_bit
+                    self.black_pawns ^= ep_bit  # Remove EP pawn
+                    self.zobrist_hash ^= zobrist_black[ep_pos]
                 else:
-                    temp.white_pawns ^= captured_bit
+                    self.white_pawns ^= ep_bit  # Remove EP pawn
+                    self.zobrist_hash ^= zobrist_white[ep_pos]
 
-        # Set end position
+        # Add pawn to end position (both hash and bitboard)
         if player_color == 'W':
-            temp.white_pawns |= end_bit
+            self.white_pawns ^= end_bit  # Toggle end bit
+            self.zobrist_hash ^= zobrist_white[end_bit.bit_length()-1]
         else:
-            temp.black_pawns |= end_bit
+            self.black_pawns ^= end_bit  # Toggle end bit
+            self.zobrist_hash ^= zobrist_black[end_bit.bit_length()-1]
 
         # Update en passant target
-        temp.en_passant_target = None
+        if self.en_passant_target:
+            old_ep_pos = (self.en_passant_target.bit_length() - 1)
+            self.zobrist_hash ^= zobrist_en_passant[old_ep_pos]
+            
+        # Set new en passant if double push
+        new_ep = None
         if abs(start_row - end_row) == 2:
             mid_row = (start_row + end_row) // 2
-            temp.en_passant_target = 1 << (mid_row * 8 + start_col)
+            new_ep = 1 << (mid_row * 8 + start_col)
+            self.zobrist_hash ^= zobrist_en_passant[mid_row * 8 + start_col]
+        
+        self.en_passant_target = new_ep
 
-        if not simulate:
-            self.white_pawns = temp.white_pawns
-            self.black_pawns = temp.black_pawns
-            self.en_passant_target = temp.en_passant_target
-            self.last_move = (start_pos, end_pos)
+        # Toggle current player
+        self.zobrist_hash ^= zobrist_current_player[0]  # XOR out old
+        self.zobrist_hash ^= zobrist_current_player[1]  # XOR in new
+        self.current_player = 'B' if self.current_player == 'W' else 'W'
+        
+        
 
         return True
+
+
 
     def _can_move_forward(self, row, col, direction):
         new_row = row + direction
