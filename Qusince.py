@@ -20,115 +20,301 @@ BLACK_CAPTURES = [ (((1 << (i - 7)) if (i - 7) >= 0 else 0) | ((1 << (i - 9)) if
 # Transposition table setup
 HASH_EXACT, HASH_ALPHA, HASH_BETA = 0, 1, 2
 TRANSPOSITION_TABLE = {}
+# Define 64-bit masks for files and ranks (assuming bit 0 = a1, bit 7 = h1, ..., bit 63 = h8)
+FILE_A = 0x0101010101010101  # File A mask: bits 0,8,16,...56
+FILE_H = 0x8080808080808080  # File H mask: bits 7,15,...63
+RANK_1 = 0x00000000000000FF  # Rank 1 mask: bits 0-7
+RANK_2 = 0x000000000000FF00  # Rank 2 mask: bits 8-15
+RANK_7 = 0x00FF000000000000  # Rank 7 mask: bits 48-55
+RANK_8 = 0xFF00000000000000  # Rank 8 mask: bits 56-63
+FULL_MASK = 0xFFFFFFFFFFFFFFFF  # 64-bit full mask
 
-# ---------------------------
-# Evaluation & Utility Functions
 def evaluate_board(board, player_color):
+    """
+    Evaluate a pawn-only chess position. 
+    Positive score favors White, negative favors Black.
+    
+    Components:
+      - Material (each pawn worth 100 points)
+      - Pawn advancement (reward pawns closer to promotion)
+      - Passed pawns (bonus for passed pawns, heavier weight)
+      - Blocked pawns (penalty for blocked pawns)
+      - Hanging pawns (penalty for pawns vulnerable to capture)
+      - En passant vulnerability (penalty if a pawn is en passant vulnerable)
+      - Pawn connectivity (penalize isolated pawns)
+    """
     white_score = 0
     black_score = 0
+    wp = board.white_pawns
+    bp = board.black_pawns
 
-    # Evaluate white pawns
-    white_pawns = board.white_pawns
-    while white_pawns:
-        lsb_val = white_pawns & -white_pawns
-        pos = LSB_INDEX_TABLE[lsb_val]
+    # --- Material Advantage ---
+    white_count = wp.bit_count()
+    black_count = bp.bit_count()
+    white_score += 100 * white_count
+    black_score += 100 * black_count
+
+    # --- Pawn Advancement ---
+    # For white, bonus increases as pawn advances upward (row 0 is promotion)
+    # For black, bonus increases as pawn advances downward (row 7 is promotion)
+    temp_wp = wp
+    while temp_wp:
+        lsb = temp_wp & -temp_wp
+        pos = LSB_INDEX_TABLE[lsb]
         row, col = PRECOMPUTED_ROW_COL[pos]
-        white_score += 10 + (6 - row) * 2
+        # White pawn: bonus = 3 points for each rank advanced (max bonus 3*7 = 21)
+        white_score += 3 * (7 - row)
+        temp_wp ^= lsb
 
-        # Passed pawn (White)
-        opponent_pawns = board.black_pawns
-        file_mask = 0x0101010101010101 << col
-        adjacent_files = (file_mask << 1) | (file_mask >> 1)
-        full_mask = file_mask | adjacent_files
-        ahead_mask = ~((1 << ((row + 1) * 8)) - 1)
-        if not (opponent_pawns & full_mask & ahead_mask):
-            white_score += 25
+    temp_bp = bp
+    while temp_bp:
+        lsb = temp_bp & -temp_bp
+        pos = LSB_INDEX_TABLE[lsb]
+        row, col = PRECOMPUTED_ROW_COL[pos]
+        # Black pawn: bonus = 3 points for each rank advanced (max bonus 3*7 = 21)
+        black_score += 3 * row
+        temp_bp ^= lsb
 
-        # Blocked pawn (White)
-        direction = -1
-        forward_row = row + direction
-        if 0 <= forward_row < 8:
-            forward_bit = 1 << (forward_row * 8 + col)
-            if (board.white_pawns | board.black_pawns) & forward_bit:
-                white_score -= 15
+    # --- Passed Pawns ---
+    # For White: calculate squares in front of black pawns.
+    black_front = bp
+    black_front |= (black_front >> 8)
+    black_front |= (black_front >> 16)
+    black_front |= (black_front >> 32)
+    black_front &= FULL_MASK
+    # Include adjacent files.
+    black_front |= ((black_front & ~FILE_H) << 1)
+    black_front |= ((black_front & ~FILE_A) >> 1)
+    black_front &= FULL_MASK
+    passed_wp = wp & ~black_front
+    white_score += 50 * passed_wp.bit_count()  # increased weight from 25 to 50
 
-        # Hanging pawn (White)
-        # White pawns attack upward: ensure row+direction is in bounds.
-        direction = -1  
+    # For Black: calculate squares in front of white pawns.
+    white_front = wp
+    white_front |= (white_front << 8)
+    white_front |= (white_front << 16)
+    white_front |= (white_front << 32)
+    white_front &= FULL_MASK
+    white_front |= ((white_front & ~FILE_H) << 1)
+    white_front |= ((white_front & ~FILE_A) >> 1)
+    white_front &= FULL_MASK
+    passed_bp = bp & ~white_front
+    black_score += 50 * passed_bp.bit_count()
+
+    # --- Blocked Pawns ---
+    # A pawn is blocked if an enemy pawn is directly in front.
+    white_blocked = ((wp << 8) & bp).bit_count()
+    black_blocked = ((bp >> 8) & wp).bit_count()
+    white_score -= 10 * white_blocked  # reduced penalty from 15 to 10
+    black_score -= 10 * black_blocked
+
+    # --- Hanging Pawns ---
+    # For White: check if an enemy pawn can capture from one of the two diagonal squares.
+    temp_wp = wp
+    while temp_wp:
+        lsb = temp_wp & -temp_wp
+        pos = LSB_INDEX_TABLE[lsb]
+        row, col = PRECOMPUTED_ROW_COL[pos]
+        direction = -1  # white's capturing direction (upwards)
         attack_mask = 0
         if col - 1 >= 0 and 0 <= row + direction < 8:
             attack_mask |= 1 << ((row + direction) * 8 + (col - 1))
         if col + 1 < 8 and 0 <= row + direction < 8:
             attack_mask |= 1 << ((row + direction) * 8 + (col + 1))
         if board.black_pawns & attack_mask:
-            white_score -= 50
+            white_score -= 40  # reduced penalty from 50 to 40
+        temp_wp ^= lsb
 
-        # En passant vulnerability (White)
-        if board.en_passant_target:
-            ep_pos = board.en_passant_target.bit_length() - 1
-            ep_row, ep_col = divmod(ep_pos, 8)
-            if row == 3 and ep_row == 2 and col == ep_col:
-                adjacent_mask = 0
-                if col - 1 >= 0:
-                    adjacent_mask |= 1 << (row * 8 + col - 1)
-                if col + 1 < 8:
-                    adjacent_mask |= 1 << (row * 8 + col + 1)
-                if board.black_pawns & adjacent_mask:
-                    white_score -= 50
-
-        white_pawns ^= lsb_val
-
-    # Evaluate black pawns
-    black_pawns = board.black_pawns
-    while black_pawns:
-        lsb_val = black_pawns & -black_pawns
-        pos = LSB_INDEX_TABLE[lsb_val]
+    # For Black:
+    temp_bp = bp
+    while temp_bp:
+        lsb = temp_bp & -temp_bp
+        pos = LSB_INDEX_TABLE[lsb]
         row, col = PRECOMPUTED_ROW_COL[pos]
-        black_score += 10 + (row - 1) * 2
-
-        # Passed pawn (Black)
-        opponent_pawns = board.white_pawns
-        file_mask = 0x0101010101010101 << col
-        adjacent_files = (file_mask << 1) | (file_mask >> 1)
-        full_mask = file_mask | adjacent_files
-        ahead_mask = (1 << (row * 8)) - 1
-        if not (opponent_pawns & full_mask & ahead_mask):
-            black_score += 25
-
-        # Blocked pawn (Black)
-        direction = 1
-        forward_row = row + direction
-        if 0 <= forward_row < 8:
-            forward_bit = 1 << (forward_row * 8 + col)
-            if (board.white_pawns | board.black_pawns) & forward_bit:
-                black_score -= 15
-
-        # Hanging pawn (Black)
-        direction = 1  
+        direction = 1  # black's capturing direction (downwards)
         attack_mask = 0
         if col - 1 >= 0 and 0 <= row + direction < 8:
             attack_mask |= 1 << ((row + direction) * 8 + (col - 1))
         if col + 1 < 8 and 0 <= row + direction < 8:
             attack_mask |= 1 << ((row + direction) * 8 + (col + 1))
         if board.white_pawns & attack_mask:
-            black_score -= 50
+            black_score -= 40
+        temp_bp ^= lsb
 
-        # En passant vulnerability (Black)
-        if board.en_passant_target:
-            ep_pos = board.en_passant_target.bit_length() - 1
-            ep_row, ep_col = divmod(ep_pos, 8)
-            if row == 4 and ep_row == 5 and col == ep_col:
-                adjacent_mask = 0
+    # --- En Passant Vulnerability ---
+    if board.en_passant_target:
+        ep_pos = board.en_passant_target.bit_length() - 1
+        ep_row, ep_col = divmod(ep_pos, 8)
+        # For White: if a pawn is on row 3 and en passant target is on row 2
+        temp_wp = wp
+        while temp_wp:
+            lsb = temp_wp & -temp_wp
+            pos = LSB_INDEX_TABLE[lsb]
+            row, col = PRECOMPUTED_ROW_COL[pos]
+            if row == 3 and ep_row == 2 and col == ep_col:
+                adjacent = 0
                 if col - 1 >= 0:
-                    adjacent_mask |= 1 << (row * 8 + col - 1)
+                    adjacent |= 1 << (row * 8 + col - 1)
                 if col + 1 < 8:
-                    adjacent_mask |= 1 << (row * 8 + col + 1)
-                if board.white_pawns & adjacent_mask:
-                    black_score -= 50
+                    adjacent |= 1 << (row * 8 + col + 1)
+                if board.black_pawns & adjacent:
+                    white_score -= 40  # reduced penalty from 50 to 40
+            temp_wp ^= lsb
 
-        black_pawns ^= lsb_val
+        # For Black: if a pawn is on row 4 and en passant target is on row 5
+        temp_bp = bp
+        while temp_bp:
+            lsb = temp_bp & -temp_bp
+            pos = LSB_INDEX_TABLE[lsb]
+            row, col = PRECOMPUTED_ROW_COL[pos]
+            if row == 4 and ep_row == 5 and col == ep_col:
+                adjacent = 0
+                if col - 1 >= 0:
+                    adjacent |= 1 << (row * 8 + col - 1)
+                if col + 1 < 8:
+                    adjacent |= 1 << (row * 8 + col + 1)
+                if board.white_pawns & adjacent:
+                    black_score -= 40
+            temp_bp ^= lsb
+
+    # --- Pawn Connectivity (Isolated Pawn Penalty) ---
+    isolated_w = 0
+    temp_wp = wp
+    while temp_wp:
+        i = (temp_wp & -temp_wp).bit_length() - 1
+        temp_wp &= temp_wp - 1
+        file_index = i % 8
+        mask_left = 0x0101010101010101 << (file_index - 1) if file_index > 0 else 0
+        mask_right = 0x0101010101010101 << (file_index + 1) if file_index < 7 else 0
+        if (wp & (mask_left | mask_right)) == 0:
+            isolated_w += 1
+    isolated_b = 0
+    temp_bp = bp
+    while temp_bp:
+        j = (temp_bp & -temp_bp).bit_length() - 1
+        temp_bp &= temp_bp - 1
+        file_index = j % 8
+        mask_left = 0x0101010101010101 << (file_index - 1) if file_index > 0 else 0
+        mask_right = 0x0101010101010101 << (file_index + 1) if file_index < 7 else 0
+        if (bp & (mask_left | mask_right)) == 0:
+            isolated_b += 1
+
+    white_score -= 20 * isolated_w
+    black_score -= 20 * isolated_b
+
+    # --- Mobility (Optional) ---
+    # (We could add a mobility component here; omitted for brevity.)
 
     return white_score - black_score if player_color == "W" else black_score - white_score
+
+# ---------------------------
+#! Evaluation & Utility Functions
+# def evaluate_board(board, player_color):
+#     white_score = 0
+#     black_score = 0
+
+#     # Evaluate white pawns
+#     white_pawns = board.white_pawns
+#     while white_pawns:
+#         lsb_val = white_pawns & -white_pawns
+#         pos = LSB_INDEX_TABLE[lsb_val]
+#         row, col = PRECOMPUTED_ROW_COL[pos]
+#         white_score += 10 + (6 - row) * 2
+
+#         # Passed pawn (White)
+#         opponent_pawns = board.black_pawns
+#         file_mask = 0x0101010101010101 << col
+#         adjacent_files = (file_mask << 1) | (file_mask >> 1)
+#         full_mask = file_mask | adjacent_files
+#         ahead_mask = ~((1 << ((row + 1) * 8)) - 1)
+#         if not (opponent_pawns & full_mask & ahead_mask):
+#             white_score += 25
+
+#         # Blocked pawn (White)
+#         direction = -1
+#         forward_row = row + direction
+#         if 0 <= forward_row < 8:
+#             forward_bit = 1 << (forward_row * 8 + col)
+#             if (board.white_pawns | board.black_pawns) & forward_bit:
+#                 white_score -= 15
+
+#         # Hanging pawn (White)
+#         # White pawns attack upward: ensure row+direction is in bounds.
+#         direction = -1  
+#         attack_mask = 0
+#         if col - 1 >= 0 and 0 <= row + direction < 8:
+#             attack_mask |= 1 << ((row + direction) * 8 + (col - 1))
+#         if col + 1 < 8 and 0 <= row + direction < 8:
+#             attack_mask |= 1 << ((row + direction) * 8 + (col + 1))
+#         if board.black_pawns & attack_mask:
+#             white_score -= 50
+
+#         # En passant vulnerability (White)
+#         if board.en_passant_target:
+#             ep_pos = board.en_passant_target.bit_length() - 1
+#             ep_row, ep_col = divmod(ep_pos, 8)
+#             if row == 3 and ep_row == 2 and col == ep_col:
+#                 adjacent_mask = 0
+#                 if col - 1 >= 0:
+#                     adjacent_mask |= 1 << (row * 8 + col - 1)
+#                 if col + 1 < 8:
+#                     adjacent_mask |= 1 << (row * 8 + col + 1)
+#                 if board.black_pawns & adjacent_mask:
+#                     white_score -= 50
+
+#         white_pawns ^= lsb_val
+
+#     # Evaluate black pawns
+#     black_pawns = board.black_pawns
+#     while black_pawns:
+#         lsb_val = black_pawns & -black_pawns
+#         pos = LSB_INDEX_TABLE[lsb_val]
+#         row, col = PRECOMPUTED_ROW_COL[pos]
+#         black_score += 10 + (row - 1) * 2
+
+#         # Passed pawn (Black)
+#         opponent_pawns = board.white_pawns
+#         file_mask = 0x0101010101010101 << col
+#         adjacent_files = (file_mask << 1) | (file_mask >> 1)
+#         full_mask = file_mask | adjacent_files
+#         ahead_mask = (1 << (row * 8)) - 1
+#         if not (opponent_pawns & full_mask & ahead_mask):
+#             black_score += 25
+
+#         # Blocked pawn (Black)
+#         direction = 1
+#         forward_row = row + direction
+#         if 0 <= forward_row < 8:
+#             forward_bit = 1 << (forward_row * 8 + col)
+#             if (board.white_pawns | board.black_pawns) & forward_bit:
+#                 black_score -= 15
+
+#         # Hanging pawn (Black)
+#         direction = 1  
+#         attack_mask = 0
+#         if col - 1 >= 0 and 0 <= row + direction < 8:
+#             attack_mask |= 1 << ((row + direction) * 8 + (col - 1))
+#         if col + 1 < 8 and 0 <= row + direction < 8:
+#             attack_mask |= 1 << ((row + direction) * 8 + (col + 1))
+#         if board.white_pawns & attack_mask:
+#             black_score -= 50
+
+#         # En passant vulnerability (Black)
+#         if board.en_passant_target:
+#             ep_pos = board.en_passant_target.bit_length() - 1
+#             ep_row, ep_col = divmod(ep_pos, 8)
+#             if row == 4 and ep_row == 5 and col == ep_col:
+#                 adjacent_mask = 0
+#                 if col - 1 >= 0:
+#                     adjacent_mask |= 1 << (row * 8 + col - 1)
+#                 if col + 1 < 8:
+#                     adjacent_mask |= 1 << (row * 8 + col + 1)
+#                 if board.white_pawns & adjacent_mask:
+#                     black_score -= 50
+
+#         black_pawns ^= lsb_val
+
+#     return white_score - black_score if player_color == "W" else black_score - white_score
 
 # ---------------------------
 # Move Generation
