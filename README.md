@@ -1,4 +1,9 @@
 # Pawn Chess
+<p float="left">
+  <img src="https://github.com/user-attachments/assets/25d607c9-0bec-499f-9ae6-e397fe99fcf5" width="350" />
+  <img src="https://github.com/user-attachments/assets/66ca91d5-04aa-4534-9c27-78e531de1960" width="200" />
+  <img src="https://github.com/user-attachments/assets/f50dfb69-c7f7-49bc-93dd-50d4397cdd8b" width="350" />
+</p>
 
 Pawn Chess is a simplified chess-like game that uses only pawns. The game is implemented in Python using Pygame for the graphical user interface and Python’s socket module for network communication. The engine uses an efficient bitboard representation for the board, along with advanced search techniques such as minimax with alpha–beta pruning, iterative deepening, and principal variation (PV) search with aspiration windows and transposition tables.
 
@@ -52,7 +57,7 @@ pip install pygame
 -Enter the game time in seconds.
 -Finally, type a command to Begin the game (B should be capital in Begin!! important).
 
-- **1. Client vs Client (Agent vs Agent)**
+- **2. Client vs Client (Agent vs Agent)**
 -Run the server as described above, but choose 2 for Client vs Client.
 -first client that connnects is the white color the second is black
 - and contine regular as before...
